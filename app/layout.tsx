@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeScript } from "./theme-script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,9 +15,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "CSENTIŌ Insights",
-  description: "CSENTIŌ Data Insights",
+  description: 'CSENTIŌ Insights: A data management dashboard built with Vercel, FastAPI, Next.js, Supabase, and Tailwind.',
   icons: {
-    icon: "/BW-2.png",
+    icon: '/BW-2.png',
   },
 };
 
@@ -27,6 +28,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <ThemeScript /> 
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

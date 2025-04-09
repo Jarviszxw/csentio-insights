@@ -8,9 +8,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { GMVByMetrics } from "@/components/gmv_by_metrics"
 
-import data from "./data.json"
 
 export default function Page() {
   return (
@@ -34,9 +32,6 @@ export default function Page() {
               </div>
             </div>
           </div>
-        </div>
-        <div className="px-4 lg:px-6">
-          <GMVByMetrics />
         </div>
       </SidebarInset>
     </SidebarProvider>
