@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 6, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
+    {"offset": {"line": 24, "column": 0}, "map": {"version":3,"sources":["file:///Users/jarvis/Desktop/dev/OnlineProjects/csentio-insights/app/settlement/page.tsx"],"sourcesContent":["export default function SettlementPage() {\n    return (\n      <div className=\"p-6\">\n        <h1 className=\"text-2xl font-bold\">Settlement Page</h1>\n        <p>This is the settlement page.</p>\n      </div>\n    );\n  }"],"names":[],"mappings":";;;;;AAAe,SAAS;IACpB,qBACE,6WAAC;QAAI,WAAU;;0BACb,6WAAC;gBAAG,WAAU;0BAAqB;;;;;;0BACnC,6WAAC;0BAAE;;;;;;;;;;;;AAGT","debugId":null}}]
+}

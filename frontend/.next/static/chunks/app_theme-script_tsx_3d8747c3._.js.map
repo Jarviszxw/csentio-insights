@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":["file:///Users/jarvis/Desktop/dev/OnlineProjects/csentio-insights/app/theme-script.tsx"],"sourcesContent":["\"use client\";\n\nimport { useEffect } from \"react\";\n\nexport function ThemeScript() {\n  useEffect(() => {\n    // This code runs immediately when the script is loaded\n    const savedTheme = localStorage.getItem(\"theme\");\n    const prefersDark = window.matchMedia(\"(prefers-color-scheme: dark)\").matches;\n    const initialTheme = savedTheme || (prefersDark ? \"dark\" : \"light\");\n    document.documentElement.classList.toggle(\"dark\", initialTheme === \"dark\");\n  }, []);\n\n  return null; // This component doesn't render anything\n}"],"names":[],"mappings":";;;AAEA;;AAFA;;AAIO,SAAS;;IACd,CAAA,GAAA,4RAAA,CAAA,YAAS,AAAD;iCAAE;YACR,uDAAuD;YACvD,MAAM,aAAa,aAAa,OAAO,CAAC;YACxC,MAAM,cAAc,OAAO,UAAU,CAAC,gCAAgC,OAAO;YAC7E,MAAM,eAAe,cAAc,CAAC,cAAc,SAAS,OAAO;YAClE,SAAS,eAAe,CAAC,SAAS,CAAC,MAAM,CAAC,QAAQ,iBAAiB;QACrE;gCAAG,EAAE;IAEL,OAAO,MAAM,yCAAyC;AACxD;GAVgB;KAAA","debugId":null}}]
+}
