@@ -23,11 +23,11 @@ venv/
 coverage/
 
 # next.js
-.next/
-out/
+frontend/.next/
+frontend/out
 
 # production
-/build
+build
 
 # misc
 .DS_Store

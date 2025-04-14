@@ -5,17 +5,46 @@ const API_BASE_URL = 'http://localhost:8000/api';
 
 export interface GMVResponse {
   total_gmv: number;
-  mom_percentage: number;
+  pop_percentage: number | string;
   trend: 'up' | 'down';
+  error?: string;
+}
+
+export interface SalesResponse {
+  total_sales: number;
+  pop_percentage: number | string;
+  trend: 'up' | 'down';
+  error?: string;
+}
+
+export interface StoresResponse {
+  total_stores: number;
+  added: number;
+  removed: number;
+  net_change: number;
+  trend: 'up' | 'down';
+  error?: string;
+}
+export interface MonthlyDataItem {
+  date: string;
+  gmv: number;
+  sales: number;
+}
+
+export interface DimensionDataItem {
+  [key: string]: string | number | undefined;
+  store?: string;
+  product?: string;
+  city?: string;
+  gmv: number;
+  trend?: number;
 }
 
 /**
  * 格式化日期为ISO格式的日期字符串 (YYYY-MM-DD)，避免时区问题
  */
 function formatDateToISOString(date: Date): string {
-  // 使用直接构建字符串的方式，避免时区转换问题
   const year = date.getFullYear();
-  // getMonth()返回0-11，需要+1
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
   return `${year}-${month}-${day}`;
@@ -23,52 +52,155 @@ function formatDateToISOString(date: Date): string {
 
 /**
  * 获取总 GMV 的函数
- * @param dateRange 可选的日期范围
+ * @param from 可选的开始日期
+ * @param to 可选的结束日期
  * @returns 返回GMV数据对象
  */
-export async function fetchTotalGMV(dateRange?: DateRange): Promise<GMVResponse> {
+export async function fetchTotalGMV(from?: Date, to?: Date): Promise<GMVResponse> {
   try {
-    console.log("API: 开始获取GMV数据，原始日期范围:", dateRange);
+    console.log("API: 开始获取GMV数据，日期范围:", { from, to });
     
-    // 构建查询参数
     const params = new URLSearchParams();
     
-    if (dateRange?.from) {
-      // 直接处理月份的第一天
-      const year = dateRange.from.getFullYear();
-      const month = dateRange.from.getMonth(); // 0-11
-      const firstDayOfMonth = new Date(year, month, 1);
-      
-      // 格式化为YYYY-MM-DD
+    if (from) {
+      const firstDayOfMonth = new Date(from.getFullYear(), from.getMonth(), 1);
       const formattedFromDate = formatDateToISOString(firstDayOfMonth);
-      
       params.append('start_date', formattedFromDate);
-      console.log("API: 使用月初日期:", formattedFromDate, "原始日期对象:", dateRange.from);
+      console.log("API: 使用月初日期:", formattedFromDate, "原始日期对象:", from);
     }
     
-    if (dateRange?.to) {
-      // 直接计算月份的最后一天
-      const year = dateRange.to.getFullYear();
-      const month = dateRange.to.getMonth(); // 0-11
-      // 下个月的第0天就是当前月的最后一天
-      const lastDayOfMonth = new Date(year, month + 1, 0);
-      
-      // 格式化为YYYY-MM-DD
+    if (to) {
+      const lastDayOfMonth = new Date(to.getFullYear(), to.getMonth() + 1, 0);
       const formattedToDate = formatDateToISOString(lastDayOfMonth);
-      
       params.append('end_date', formattedToDate);
-      console.log("API: 使用月末日期:", formattedToDate, "原始日期对象:", dateRange.to);
+      console.log("API: 使用月末日期:", formattedToDate, "原始日期对象:", to);
     }
     
-    // 构建完整 URL
     const url = `${API_BASE_URL}/metrics/total-gmv${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
     
-    // 添加超时控制
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     
-    // 发送请求
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    
+    // 直接返回解析后的数据，TypeScript 应该能正确推断
+    const data: GMVResponse = await response.json();
+    console.log("API: 获取到GMV数据:", data);
+    return data;
+  } catch (error) {
+    console.error('API: 获取GMV数据失败:', error);
+    return {
+      total_gmv: 0,
+      pop_percentage: 0,
+      trend: 'up',
+      error: String(error)
+    };
+  }
+}
+
+/**
+ * 获取总销售额的函数
+ * @param from 可选的开始日期
+ * @param to 可选的结束日期
+ * @returns 返回总销售额数据对象
+ */
+export async function fetchTotalSales(from?: Date, to?: Date): Promise<SalesResponse> {
+  try {
+    console.log("API: 开始获取总销售额数据，日期范围:", { from, to });
+    
+    const params = new URLSearchParams();
+
+    if (from) {
+      const firstDayOfMonth = new Date(from.getFullYear(), from.getMonth(), 1);
+      const formattedFromDate = formatDateToISOString(firstDayOfMonth);
+      params.append('start_date', formattedFromDate);
+      console.log("API: 使用月初日期:", formattedFromDate, "原始日期对象:", from);
+    }
+
+    if (to) {
+      const lastDayOfMonth = new Date(to.getFullYear(), to.getMonth() + 1, 0);
+      const formattedToDate = formatDateToISOString(lastDayOfMonth);
+      params.append('end_date', formattedToDate);
+      console.log("API: 使用月末日期:", formattedToDate, "原始日期对象:", to);
+    }
+
+    const url = `${API_BASE_URL}/metrics/total-sales${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(url, {
+      method: 'GET', 
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    
+    const data: SalesResponse = await response.json();
+    console.log("API: 获取到总销售额数据:", data);
+    return data;
+  } catch (error) {
+    console.error('API: 获取总销售额数据失败:', error);
+    return {
+      total_sales: 0,
+      pop_percentage: 0,
+      trend: 'up',
+      error: String(error)
+    };
+  }
+}
+
+/**
+ * 获取月度GMV和销售数据
+ * @param from 可选的开始日期
+ * @param to 可选的结束日期
+ * @returns 返回月度数据数组
+ */
+export async function fetchMonthlyData(from?: Date, to?: Date): Promise<MonthlyDataItem[]> {
+  try {
+    console.log("API: 开始获取月度GMV和销售数据，日期范围:", { from, to });
+    
+    const params = new URLSearchParams();
+    
+    if (from) {
+      const formattedFromDate = formatDateToISOString(from);
+      params.append('start_date', formattedFromDate);
+      console.log("API: 使用开始日期:", formattedFromDate);
+    }
+    
+    if (to) {
+      const formattedToDate = formatDateToISOString(to);
+      params.append('end_date', formattedToDate);
+      console.log("API: 使用结束日期:", formattedToDate);
+    }
+    
+    const url = `${API_BASE_URL}/metrics/monthly-data${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -84,16 +216,148 @@ export async function fetchTotalGMV(dateRange?: DateRange): Promise<GMVResponse>
     }
     
     const data = await response.json();
-    console.log("API: 获取到GMV数据:", data);
+    console.log("API: 获取到月度数据:", data);
+    
+    if (!Array.isArray(data)) {
+      throw new Error("API返回的月度数据格式不正确");
+    }
+    
+    return data as MonthlyDataItem[];
+  } catch (error) {
+    console.error('API: 获取月度数据失败:', error);
+    // 返回空数组，由调用方决定是否使用默认数据
+    return [];
+  }
+}
+
+/**
+ * 获取总店铺数量的函数
+ * @param from 可选的开始日期
+ * @param to 可选的结束日期
+ * @returns 返回总店铺数量数据对象
+ */
+export async function fetchTotalStores(from?: Date, to?: Date): Promise<StoresResponse> {
+  try {
+    console.log("API: 开始获取总店铺数量数据，日期范围:", { from, to });
+
+    const params = new URLSearchParams(); 
+
+    if (from) {
+      const formattedFromDate = formatDateToISOString(from);
+      params.append('start_date', formattedFromDate);
+      console.log("API: 使用开始日期:", formattedFromDate);
+    } 
+
+    if (to) {
+      const formattedToDate = formatDateToISOString(to);
+      params.append('end_date', formattedToDate);
+      console.log("API: 使用结束日期:", formattedToDate);
+    } 
+
+    const url = `${API_BASE_URL}/metrics/total-stores${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);  
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: controller.signal 
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    } 
+
+    const data: StoresResponse = await response.json();
+    console.log("API: 获取到总店铺数量数据:", data);
     return data;
   } catch (error) {
-    console.error('API: 获取GMV数据失败:', error);
-    // 返回默认值
+    console.error('API: 获取总店铺数量数据失败:', error); 
     return {
-      total_gmv: 0, // 默认值设为0更合理
-      mom_percentage: 12.5,
-      trend: 'up'
+      total_stores: 0,
+      added: 0,
+      removed: 0,
+      net_change: 0,
+      trend: 'up',
+      error: String(error)
     };
+  }
+}
+
+/**
+ * 获取按维度的GMV数据
+ * @param dimension 维度，如"store", "product", "city"
+ * @param from 可选的开始日期
+ * @param to 可选的结束日期
+ * @param limit 可选的结果数量限制
+ * @returns 返回维度数据数组
+ */
+export async function fetchGMVByDimension(
+  dimension: string,
+  from?: Date,
+  to?: Date,
+  limit: number = 6
+): Promise<DimensionDataItem[]> {
+  try {
+    console.log(`API: 开始获取按${dimension}维度的GMV数据，日期范围:`, { from, to });
+    
+    const params = new URLSearchParams();
+    params.append('dimension', dimension);
+    
+    if (from) {
+      const formattedFromDate = formatDateToISOString(from);
+      params.append('start_date', formattedFromDate);
+      console.log("API: 使用开始日期:", formattedFromDate);
+    }
+    
+    if (to) {
+      const formattedToDate = formatDateToISOString(to);
+      params.append('end_date', formattedToDate);
+      console.log("API: 使用结束日期:", formattedToDate);
+    }
+    
+    if (limit) {
+      params.append('limit', limit.toString());
+    }
+    
+    const url = `${API_BASE_URL}/metrics/gmv-by-dimension${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log(`API: 获取到按${dimension}维度的GMV数据:`, data);
+    
+    if (!Array.isArray(data)) {
+      throw new Error(`API返回的${dimension}维度数据格式不正确`);
+    }
+    
+    return data as DimensionDataItem[];
+  } catch (error) {
+    console.error(`API: 获取按${dimension}维度的GMV数据失败:`, error);
+    // 返回空数组，由调用方决定是否使用默认数据
+    return [];
   }
 }
 

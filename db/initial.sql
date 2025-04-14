@@ -24,6 +24,7 @@ CREATE TABLE stores (
     city_id INTEGER REFERENCES cities(id),
     latitude DECIMAL(9, 6), -- 存储纬度
     longitude DECIMAL(9, 6), -- 存储经度
+    is_active BOOLEAN NOT NULL DEFAULT TRUE, -- 新增字段
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

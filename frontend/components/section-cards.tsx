@@ -1,9 +1,10 @@
+// src/section-cards.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
 import { useDateRange } from "@/components/date-range-context";
-import { fetchTotalGMV, GMVResponse } from "@/lib/api";
+import { fetchTotalGMV, fetchTotalSales, GMVResponse, SalesResponse, fetchTotalStores, StoresResponse } from "@/lib/api";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,20 +15,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Loading } from "./ui/loading";
+import { cn } from "@/lib/utils";
 
 export function SectionCards() {
   const { dateRange } = useDateRange();
-  const [gmvData, setGmvData] = useState<GMVResponse>({
-    total_gmv: 1250,
-    mom_percentage: 12.5,
-    trend: 'up'
-  });
+
+  const [gmvData, setGmvData] = useState<GMVResponse | null>(null);
+  const [salesData, setSalesData] = useState<SalesResponse | null>(null);
+  const [storesData, setStoresData] = useState<StoresResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [lastRequestRange, setLastRequestRange] = useState<string | null>(null);
 
-  // 当日期范围变化时获取最新数据
   useEffect(() => {
-    // 记录明确的日期信息用于调试
     const fromDateStr = dateRange?.from ? new Date(dateRange.from).toISOString().split('T')[0] : 'undefined';
     const toDateStr = dateRange?.to ? new Date(dateRange.to).toISOString().split('T')[0] : 'undefined';
     const rangeDescription = `${fromDateStr} 到 ${toDateStr}`;
@@ -35,61 +35,114 @@ export function SectionCards() {
     console.log(`SectionCards: 日期范围变化: ${rangeDescription}`);
     setLastRequestRange(rangeDescription);
     
-    async function loadGMVData() {
-      if (!dateRange) {
-        console.log("SectionCards: 日期范围为空，使用默认数据");
+    async function loadData() {
+      if (!dateRange || (!dateRange.from && !dateRange.to)) {
+        console.log("SectionCards: 日期范围无效，使用默认数据");
+        setGmvData({
+          total_gmv: 0,
+          pop_percentage: 0,
+          trend: "up"
+        });
+        setSalesData({
+          total_sales: 0,
+          pop_percentage: 0,
+          trend: "up"
+        });
+        setStoresData({
+          total_stores: 0,
+          added: 0,
+          removed: 0,
+          net_change: 0,
+          trend: "up"
+        });
+        setIsLoading(false);
         return;
       }
-      
-      // 验证处理后的日期范围格式
-      console.log("SectionCards: 处理后的日期对象:", {
-        from: dateRange.from ? {
-          year: dateRange.from.getFullYear(),
-          month: dateRange.from.getMonth() + 1, // 显示月份时加1使其符合人类理解(1-12)
-          date: dateRange.from.getDate(),
-          iso: dateRange.from.toISOString()
-        } : null,
-        to: dateRange.to ? {
-          year: dateRange.to.getFullYear(),
-          month: dateRange.to.getMonth() + 1, // 显示月份时加1使其符合人类理解(1-12)
-          date: dateRange.to.getDate(),
-          iso: dateRange.to.toISOString()
-        } : null
-      });
-      
+
       setIsLoading(true);
-      console.log("SectionCards: 开始加载GMV数据...");
+      console.log("SectionCards: 开始加载数据...");
       
       try {
-        // 获取相应日期范围的GMV数据
-        const data = await fetchTotalGMV(dateRange);
-        console.log("SectionCards: 获取到GMV数据:", data);
-        setGmvData(data);
+        const from = dateRange?.from ?? undefined;
+        const to = dateRange?.to ?? undefined;
+
+        const [gmvData, salesData, storesData] = await Promise.all([
+          fetchTotalGMV(from, to),
+          fetchTotalSales(from, to),
+          fetchTotalStores(from, to)
+        ]);
+        
+        console.log("SectionCards: 获取到GMV数据:", gmvData);
+        console.log("SectionCards: 获取到总销售额数据:", salesData);
+        console.log("SectionCards: 获取到总店铺数量数据:", storesData);
+        setGmvData(gmvData);
+        setSalesData(salesData);
+        setStoresData(storesData);
       } catch (error) {
-        console.error("SectionCards: 加载GMV数据失败:", error);
+        console.error("SectionCards: 加载数据失败:", error);
+        setGmvData({
+          total_gmv: 0,
+          pop_percentage: 0,
+          trend: "up",
+          error: String(error)
+        });
+        setSalesData({
+          total_sales: 0,
+          pop_percentage: 0,
+          trend: "up",
+          error: String(error)
+        });
+        setStoresData({
+          total_stores: 0,
+          added: 0,
+          removed: 0,
+          net_change: 0,
+          trend: "up",
+          error: String(error)
+        });
       } finally {
         setIsLoading(false);
       }
     }
 
-    loadGMVData();
-  }, [dateRange]); // 仅当dateRange变化时重新获取数据
+    loadData();
+  }, [dateRange]);
 
-  // 格式化GMV为货币
+  if (!gmvData || !salesData || !storesData) {
+    return (
+      <div className="flex w-full h-[200px] items-center justify-center">
+        <Loading size="lg" />
+      </div>
+    );
+  }
+
   const formattedGMV = new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'usd',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(gmvData.total_gmv);
 
+  const formatPercentage = (pop_percentage: number | string): string => {
+    if (typeof pop_percentage === "number") {
+      return `${pop_percentage > 0 ? "+" : ""}${pop_percentage}%`;
+    }
+    return "--";
+  };
+
   return (
     <div className="flex w-full gap-4 overflow-x-auto px-4 lg:px-6 [&>*]:min-w-[280px] [&>*]:flex-1">
-      <Card className="@container/card border-none">
+      <Card className="@container/card">
         <CardHeader>
-          <CardDescription className="text-l font-semibold tabular-nums">Total GMV</CardDescription>
+          <div className="flex items-center justify-between">
+            <CardDescription className="text-l font-semibold tabular-nums">Total GMV</CardDescription>
+          </div>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            {isLoading ? "Loading..." : formattedGMV}
+            {isLoading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+            ) : (
+              formattedGMV
+            )}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="border-none">
@@ -98,60 +151,117 @@ export function SectionCards() {
               ) : (
                 <IconTrendingDown />
               )}
-              {gmvData.mom_percentage > 0 ? "+" : ""}
-              {gmvData.mom_percentage.toFixed(1)}%
+              {formatPercentage(gmvData.pop_percentage)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
             {gmvData.trend === 'up' ? (
-              <>Trending up this month <IconTrendingUp className="size-4" /></>
+              <>Trending up {formatPercentage(gmvData.pop_percentage)} this period <IconTrendingUp className="size-4" /></>
             ) : (
-              <>Down this period <IconTrendingDown className="size-4" /></>
+              <>Down {formatPercentage(gmvData.pop_percentage)} this period <IconTrendingDown className="size-4" /></>
             )}
           </div>
-          {lastRequestRange && (
-            <div className="text-muted-foreground text-xs">
-              日期范围: {lastRequestRange}
-            </div>
+          {gmvData.error && (
+            <div className="text-red-500 text-xs">Error: {gmvData.error}</div>
           )}
         </CardFooter>
       </Card>
       
-      {/* 保留其他卡片 */}
-      <Card className="@container/card border-none">
+      <Card className="@container/card">
         <CardHeader>
-          <CardDescription className="text-l font-semibold tabular-nums">Total Sales</CardDescription>
+          <div className="flex items-center justify-between">
+            <CardDescription className="text-l font-semibold tabular-nums">Total Sales</CardDescription>
+          </div>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            1,234
+            {isLoading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+            ) : (
+              salesData.total_sales
+            )}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="border-none">
-              <IconTrendingDown />
-              -20%
+              {salesData.trend === 'up' ? (
+                <IconTrendingUp />
+              ) : (
+                <IconTrendingDown />
+              )}
+              {formatPercentage(salesData.pop_percentage)}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Down 20% this period <IconTrendingDown className="size-4" />
+            {salesData.trend === 'up' ? (
+              <>Trending up {formatPercentage(salesData.pop_percentage)} this period <IconTrendingUp className="size-4" /></>
+            ) : (
+              <>Down {formatPercentage(salesData.pop_percentage)} this period <IconTrendingDown className="size-4" /></>
+            )}
           </div>
+          {salesData.error && (
+            <div className="text-red-500 text-xs">Error: {salesData.error}</div>
+          )}
         </CardFooter>
       </Card>
-      <Card className="@container/card border-none">
+      
+      <Card className="@container/card">
         <CardHeader>
           <CardDescription className="text-l font-semibold tabular-nums">Total Stores</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            45,678
+            {isLoading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+            ) : (
+              storesData.total_stores
+            )}
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="border-none">
-              <IconTrendingUp />
-              +12.5%
+              {storesData.trend === 'up' ? (
+                <IconTrendingUp />
+              ) : (
+                <IconTrendingDown />
+              )}
+              {storesData.net_change >= 0 ? `+${storesData.net_change}` : storesData.net_change}
             </Badge>
           </CardAction>
         </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+        <div className="line-clamp-1 flex gap-2 font-medium">
+            {storesData.added >= 0 && storesData.removed === 0 ? (
+              <>
+                Added {storesData.added} stores
+                <IconTrendingUp className="size-4 " />
+              </>
+            ) : storesData.removed > 0 && storesData.added === 0 ? (
+              <>
+                Removed {storesData.removed} stores
+                <IconTrendingDown className="size-4 " />
+              </>
+            ) : (
+              <div className="flex gap-2">
+              <>
+                Added {storesData.added} stores
+                <IconTrendingUp className="size-4 " />
+              </>
+              <div className="flex gap-2">
+                Removed {storesData.removed} stores 
+                <IconTrendingDown className="size-4 " />
+              </div>
+                Net change of {storesData.net_change} stores 
+                {storesData.net_change >= 0 ? (
+                  <IconTrendingUp className="size-4 " />
+                ) : (
+                  <IconTrendingDown className="size-4 " />
+                )}
+              </div>
+            )}
+          </div>
+          {storesData.error && (
+            <div className="text-red-500 text-xs">Error: {storesData.error}</div>
+          )}
+        </CardFooter>
       </Card>
     </div>
   );
