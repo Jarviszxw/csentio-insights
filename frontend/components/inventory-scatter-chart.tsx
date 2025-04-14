@@ -1,71 +1,91 @@
 "use client";
 
-import { Scatter, ScatterChart, CartesianGrid, XAxis, YAxis, Tooltip } from "recharts";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+import * as React from "react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTheme } from "next-themes";
 
-interface ScatterData {
-  product: string;
-  quantity: number;
-  x: number; // For scatter plot positioning
-  y: number; // For scatter plot positioning
-}
-
-const scatterData: ScatterData[] = [
-  { product: "Product A", quantity: 150, x: 1, y: 150 },
-  { product: "Product B", quantity: 200, x: 2, y: 200 },
-  { product: "Product C", quantity: 100, x: 3, y: 100 },
-  { product: "Product D", quantity: 50, x: 4, y: 50 },
+// 模拟库存数据
+const mockProductData = [
+  { name: "SK-001", quantity: 120 },
+  { name: "SK-002", quantity: 85 },
+  { name: "SK-003", quantity: 64 },
+  { name: "SK-004", quantity: 37 },
+  { name: "SK-005", quantity: 93 },
+  { name: "SK-006", quantity: 72 },
+  { name: "SK-007", quantity: 55 },
+  { name: "SK-008", quantity: 128 },
+  { name: "SK-009", quantity: 47 },
+  { name: "SK-010", quantity: 106 },
 ];
 
-const chartConfig = {
-  quantity: {
-    label: "Quantity",
-    color: "hsl(201, 100%, 81%)", // shadcn/ui light blue
-  },
-} satisfies ChartConfig;
-
 export function InventoryScatterChart() {
-  const totalQuantity = scatterData.reduce((sum, item) => sum + item.quantity, 0);
+  // 在实际应用中，应该通过API获取数据
+  const [productData, setProductData] = React.useState(mockProductData);
+  const { theme } = useTheme();
+
+  // 计算总数量
+  const totalQuantity = productData.reduce((sum, item) => sum + item.quantity, 0);
+  
+  // 根据主题设置颜色
+  const barColor = "hsl(142, 71%, 45%)"; // shadcn/ui green color
 
   return (
-    <Card className="@container/card">
-      <CardHeader>
-        <CardTitle>Quantity vs Product</CardTitle>
-        <CardDescription>Total Quantity: {totalQuantity}</CardDescription>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base">Inventory Distribution</CardTitle>
+        <div className="text-sm text-muted-foreground">
+          Total Quantity: <span className="font-medium">{totalQuantity}</span>
+        </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
-          <ScatterChart>
-            <CartesianGrid />
-            <XAxis
-              type="number"
-              dataKey="x"
-              name="Product"
-              tickFormatter={(value) =>
-                scatterData.find((item) => item.x === value)?.product || ""
-              }
-            />
-            <YAxis type="number" dataKey="y" name="Quantity" />
-            <Tooltip content={<ChartTooltipContent />} />
-            <Scatter
-              name="Products"
-              data={scatterData}
-              fill="var(--color-quantity)"
-            />
-          </ScatterChart>
-        </ChartContainer>
+        <div className="h-[350px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={productData}
+              margin={{
+                top: 10,
+                right: 10,
+                left: 0,
+                bottom: 50,
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.4} />
+              <XAxis 
+                dataKey="name" 
+                angle={-45} 
+                textAnchor="end" 
+                height={70}
+                tick={{ fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis 
+                axisLine={false}
+                tickLine={false}
+                tickCount={7}
+                domain={[0, 'auto']}
+                hide={true}
+              />
+              <Tooltip 
+                cursor={{fill: 'rgba(0, 0, 0, 0.05)'}}
+                contentStyle={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--background)',
+                }}
+                formatter={(value) => [`${value}`, 'Quantity']}
+                labelFormatter={(value) => `Product: ${value}`}
+              />
+              <Bar 
+                dataKey="quantity" 
+                fill={barColor}
+                radius={[4, 4, 0, 0]}
+                barSize={30}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

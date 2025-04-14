@@ -1,243 +1,150 @@
 "use client";
 
 import * as React from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Store } from "lucide-react";
+import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
 
-// Fix for Leaflet marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+// 客户端组件不会在服务器端渲染
+const MapComponents = dynamic(
+  () => import("../components/map-components"),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-muted-foreground">Loading map...</div>
+      </div>
+    )
+  }
+);
 
-interface Store {
-  id: string;
-  name: string;
+interface StoreMapProps {
+  className?: string;
+}
+
+// Define the store data structure
+interface StoreLocation {
+  id: number;
+  store_name: string;
+  address: string;
+  contact_info: string;
+  is_active: boolean;
   latitude: number;
   longitude: number;
 }
 
-const initialStores: Store[] = [
-  { id: "1", name: "Store A - Beijing", latitude: 39.9042, longitude: 116.4074 },
-  { id: "2", name: "Store B - Shanghai", latitude: 31.2304, longitude: 121.4737 },
-  { id: "3", name: "Store C - Guangzhou", latitude: 23.1291, longitude: 113.2644 },
+// Mock data for store locations
+const mockStoreLocations: StoreLocation[] = [
+  {
+    id: 1,
+    store_name: "Store Shanghai",
+    address: "123 Nanjing Road, Shanghai, China",
+    contact_info: "contact@shanghai.store",
+    is_active: true,
+    latitude: 31.2304,
+    longitude: 121.4737
+  },
+  {
+    id: 2,
+    store_name: "Store Beijing",
+    address: "456 Wangfujing Street, Beijing, China",
+    contact_info: "contact@beijing.store",
+    is_active: true,
+    latitude: 39.9042,
+    longitude: 116.4074
+  },
+  {
+    id: 3,
+    store_name: "Store Guangzhou",
+    address: "789 Beijing Road, Guangzhou, China",
+    contact_info: "contact@guangzhou.store",
+    is_active: false,
+    latitude: 23.1291,
+    longitude: 113.2644
+  },
+  {
+    id: 4,
+    store_name: "Store Shenzhen",
+    address: "321 Shennan Road, Shenzhen, China",
+    contact_info: "contact@shenzhen.store",
+    is_active: true,
+    latitude: 22.5431,
+    longitude: 114.0579
+  },
+  {
+    id: 5,
+    store_name: "Store Chengdu",
+    address: "654 Chunxi Road, Chengdu, China",
+    contact_info: "contact@chengdu.store",
+    is_active: true,
+    latitude: 30.5728,
+    longitude: 104.0668
+  }
 ];
 
-export function StoreMap() {
-  const [stores, setStores] = React.useState<Store[]>(initialStores);
-  const [newStore, setNewStore] = React.useState<Partial<Store>>({});
-  const [editStore, setEditStore] = React.useState<Store | null>(null);
-  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+// Calculate the center of all store locations
+const calculateMapCenter = (locations: StoreLocation[]) => {
+  if (locations.length === 0) return [30.0, 105.0]; // Default to center of China
+  
+  const validLocations = locations.filter(loc => 
+    loc.latitude !== null && loc.longitude !== null);
+  
+  if (validLocations.length === 0) return [30.0, 105.0];
+  
+  const totalLat = validLocations.reduce((sum, loc) => sum + loc.latitude, 0);
+  const totalLng = validLocations.reduce((sum, loc) => sum + loc.longitude, 0);
+  
+  return [
+    totalLat / validLocations.length,
+    totalLng / validLocations.length
+  ];
+};
 
-  const handleAddStore = () => {
-    if (newStore.name && newStore.latitude && newStore.longitude) {
-      setStores([
-        ...stores,
-        {
-          id: Date.now().toString(),
-          name: newStore.name,
-          latitude: newStore.latitude,
-          longitude: newStore.longitude,
-        },
-      ]);
-      setNewStore({});
-      setIsAddDialogOpen(false);
-    }
-  };
-
-  const handleEditStore = () => {
-    if (editStore && editStore.name && editStore.latitude && editStore.longitude) {
-      setStores(
-        stores.map((store) =>
-          store.id === editStore.id
-            ? { ...store, name: editStore.name, latitude: editStore.latitude, longitude: editStore.longitude }
-            : store
-        )
-      );
-      setEditStore(null);
-      setIsEditDialogOpen(false);
-    }
-  };
-
-  const handleDeleteStore = (id: string) => {
-    setStores(stores.filter((store) => store.id !== id));
-  };
+export function StoreMap({ className }: StoreMapProps) {
+  const [storeLocations, setStoreLocations] = React.useState<StoreLocation[]>(mockStoreLocations);
+  const [selectedStore, setSelectedStore] = React.useState<StoreLocation | null>(null);
+  
+  // Filter out locations with invalid coordinates
+  const validLocations = storeLocations.filter(
+    store => typeof store.latitude === 'number' && typeof store.longitude === 'number'
+  );
+  
+  // Center map on the average position of all stores
+  const center = calculateMapCenter(validLocations);
 
   return (
-    <Card className="@container/card">
-      <CardHeader>
-        <CardTitle>Store Locations</CardTitle>
-        <div className="flex gap-2">
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>Add Store</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Store</DialogTitle>
-                <DialogDescription>Enter the details of the new store location.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Name
-                  </Label>
-                  <Input
-                    id="name"
-                    value={newStore.name || ""}
-                    onChange={(e) => setNewStore({ ...newStore, name: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="latitude" className="text-right">
-                    Latitude
-                  </Label>
-                  <Input
-                    id="latitude"
-                    type="number"
-                    value={newStore.latitude || ""}
-                    onChange={(e) => setNewStore({ ...newStore, latitude: parseFloat(e.target.value) })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="longitude" className="text-right">
-                    Longitude
-                  </Label>
-                  <Input
-                    id="longitude"
-                    type="number"
-                    value={newStore.longitude || ""}
-                    onChange={(e) => setNewStore({ ...newStore, longitude: parseFloat(e.target.value) })}
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleAddStore}>Add</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <Card className={cn("w-full h-[500px]", className)}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Store className="h-5 w-5" />
+          Store Locations Map
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="h-[500px] w-full">
-          <MapContainer
-            center={[35.8617, 104.1954]} // Center of China
-            zoom={4}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-            {stores.map((store) => (
-              <Marker key={store.id} position={[store.latitude, store.longitude]}>
-                <Popup>
-                  <div className="flex flex-col gap-2">
-                    <strong>{store.name}</strong>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditStore(store);
-                          setIsEditDialogOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteStore(store.id)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </div>
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Store</DialogTitle>
-              <DialogDescription>Modify the details of the store location.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  id="edit-name"
-                  value={editStore?.name || ""}
-                  onChange={(e) =>
-                    setEditStore((prev) => prev ? { ...prev, name: e.target.value } : null)
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-latitude" className="text-right">
-                  Latitude
-                </Label>
-                <Input
-                  id="edit-latitude"
-                  type="number"
-                  value={editStore?.latitude || ""}
-                  onChange={(e) =>
-                    setEditStore((prev) => prev ? { ...prev, latitude: parseFloat(e.target.value) } : null)
-                  }
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="edit-longitude" className="text-right">
-                  Longitude
-                </Label>
-                <Input
-                  id="edit-longitude"
-                  type="number"
-                  value={editStore?.longitude || ""}
-                  onChange={(e) =>
-                    setEditStore((prev) => prev ? { ...prev, longitude: parseFloat(e.target.value) } : null)
-                  }
-                  className="col-span-3"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleEditStore}>Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <CardContent className="h-[calc(100%-60px)]">
+        <MapComponents 
+          center={center} 
+          locations={validLocations} 
+          onSelectStore={setSelectedStore}
+        />
       </CardContent>
     </Card>
   );
 }
+
+// 添加到你的全局CSS文件中
+// .store-popup .leaflet-popup-content-wrapper {
+//   border-radius: 0.5rem;
+//   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+// }
+// 
+// .store-popup .leaflet-popup-content {
+//   margin: 12px 16px;
+//   line-height: 1.5;
+// }
+//
+// .custom-marker-icon {
+//   display: flex;
+//   align-items: center;
+//   justify-content: center;
+// }

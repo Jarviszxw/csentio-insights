@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useContext } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -20,8 +21,8 @@ const stores = [
   { id: "store-c", name: "Store C" },
 ];
 
-// 创建一个context来全局管理Inventory的视图模式
-export const InventoryViewContext = React.createContext<{
+// 创建Context来全局管理Settlement的视图模式
+export const SettlementViewContext = React.createContext<{
   viewMode: "total" | "by-store";
   storeId: string;
   setViewMode: React.Dispatch<React.SetStateAction<"total" | "by-store">>;
@@ -33,9 +34,18 @@ export const InventoryViewContext = React.createContext<{
   setStoreId: () => {},
 });
 
-export function InventoryFilter() {
-  const [viewMode, setViewMode] = React.useState<"total" | "by-store">("total");
-  const [storeId, setStoreId] = React.useState("all");
+// 创建一个hook来使用Settlement视图模式Context
+export function useSettlementView() {
+  const context = useContext(SettlementViewContext);
+  if (!context) {
+    throw new Error("useSettlementView must be used within a SettlementViewProvider");
+  }
+  return context;
+}
+
+export function SettlementFilter() {
+  // 使用上级组件提供的Context
+  const { viewMode, storeId, setViewMode, setStoreId } = useSettlementView();
 
   return (
     <div className="flex items-center gap-4">
@@ -69,4 +79,4 @@ export function InventoryFilter() {
       )}
     </div>
   );
-}
+} 
