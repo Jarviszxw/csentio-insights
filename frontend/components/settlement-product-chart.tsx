@@ -77,9 +77,6 @@ export function SettlementProductChart() {
             ? `Sales by Product (${storeId.replace("store-", "Store ")})`
             : "Sales by Product"}
         </CardTitle>
-        <div className="text-sm text-muted-foreground">
-          Total GMV: <span className="font-medium">¥{totalGMV.toLocaleString()}</span>
-        </div>
       </CardHeader>
       <CardContent>
         <div className="h-[350px] w-full">

@@ -7,6 +7,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { StoreTabs } from "./tabs";
+import { StoreViewProvider } from "@/components/store-context";
 
 export default function StorePage() {
   return (
@@ -21,15 +22,15 @@ export default function StorePage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-4 md:py-2">
-              <div className="px-4 lg:px-6">
+        <StoreViewProvider>
+          <div className="flex flex-1 flex-col">
+            <div className="@container/main flex flex-1 flex-col gap-2">
+              <div className="flex justify-between items-center px-4 pt-4 lg:px-6">
                 <StoreTabs />
               </div>
             </div>
           </div>
-        </div>
+        </StoreViewProvider>
       </SidebarInset>
     </SidebarProvider>
   );

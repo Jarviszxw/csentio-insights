@@ -22,17 +22,26 @@ const stores = [
 ];
 
 // 创建Context来全局管理Settlement的视图模式
-export const SettlementViewContext = React.createContext<{
-  viewMode: "total" | "by-store";
-  storeId: string;
-  setViewMode: React.Dispatch<React.SetStateAction<"total" | "by-store">>;
-  setStoreId: React.Dispatch<React.SetStateAction<string>>;
-}>({
-  viewMode: "total",
+export type ViewMode = "total" | "by-store";
+
+export const SettlementViewContext = React.createContext({
+  viewMode: "total" as ViewMode,
   storeId: "all",
-  setViewMode: () => {},
-  setStoreId: () => {},
+  setViewMode: (() => {}) as React.Dispatch<React.SetStateAction<ViewMode>>,
+  setStoreId: (() => {}) as React.Dispatch<React.SetStateAction<string>>,
 });
+
+// SettlementViewProvider component to provide context
+export function SettlementViewProvider({ children }: { children: React.ReactNode }) {
+  const [viewMode, setViewMode] = React.useState<"total" | "by-store">("total");
+  const [storeId, setStoreId] = React.useState("all");
+  
+  return (
+    <SettlementViewContext.Provider value={{ viewMode, storeId, setViewMode, setStoreId }}>
+      {children}
+    </SettlementViewContext.Provider>
+  );
+}
 
 // 创建一个hook来使用Settlement视图模式Context
 export function useSettlementView() {

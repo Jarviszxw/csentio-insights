@@ -36,10 +36,10 @@ export function InventoryStatistics() {
 
   return (
     <Card className="w-full">
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-1">
         <CardTitle className="text-base">Inventory Statistics</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid gap-3 pt-1">
         {/* 第一行：Total Sample */}
         <div className="flex items-center">
           <div className="flex flex-col w-48">
@@ -49,8 +49,8 @@ export function InventoryStatistics() {
           <div className="flex flex-wrap gap-2">
             {data.sample.skuDetails.map((sku) => (
               <Badge key={sku.id} variant="outline" className="flex items-center gap-1">
-                <span className="text-xs font-medium">{sku.name}</span>
-                <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                <span className="text-m font-medium">{sku.name}</span>
+                <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
                   {sku.quantity}
                 </span>
               </Badge>
@@ -70,8 +70,8 @@ export function InventoryStatistics() {
           <div className="flex flex-wrap gap-2">
             {data.inventory.skuDetails.map((sku) => (
               <Badge key={sku.id} variant="outline" className="flex items-center gap-1">
-                <span className="text-xs font-medium">{sku.name}</span>
-                <span className="ml-1 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                <span className="text-m font-medium">{sku.name}</span>
+                <span className="ml-1 rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium text-secondary-foreground">
                   {sku.quantity}
                 </span>
               </Badge>

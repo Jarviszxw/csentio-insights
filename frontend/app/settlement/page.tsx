@@ -6,23 +6,12 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { SettlementFilter, SettlementViewContext } from "@/components/settlement-filter"
+import { SettlementFilter, SettlementViewProvider } from "@/components/settlement-filter"
 import { SettlementStatistics } from "@/components/settlement-statistics"
 import { SettlementProductChart } from "@/components/settlement-product-chart"
 import { SettlementRecordsTable } from "@/components/settlement-records-table"
-import { useState } from "react"
 
-// 创建一个Settlement视图模式提供组件
-function SettlementViewProvider({ children }: { children: React.ReactNode }) {
-  const [viewMode, setViewMode] = useState<"total" | "by-store">("total")
-  const [storeId, setStoreId] = useState("all")
-
-  return (
-    <SettlementViewContext.Provider value={{ viewMode, storeId, setViewMode, setStoreId }}>
-      {children}
-    </SettlementViewContext.Provider>
-  )
-}
+import React from "react"
 
 export default function SettlementPage() {
   return (
@@ -50,7 +39,7 @@ export default function SettlementPage() {
                 <div className="px-4 lg:px-6">
                   <SettlementProductChart />
                 </div>
-                <div className="px-4 lg:px-6">
+                <div className="px-4 lg:px-6 mt-[-69px]">
                   <SettlementRecordsTable />
                 </div>
               </div>

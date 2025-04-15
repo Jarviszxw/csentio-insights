@@ -1,9 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTheme } from "next-themes";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
+import { InfoIcon } from "lucide-react";
 
 // 模拟库存数据
 const mockProductData = [
@@ -33,9 +40,18 @@ export function InventoryScatterChart() {
   return (
     <Card className="w-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base">Inventory Distribution</CardTitle>
-        <div className="text-sm text-muted-foreground">
-          Total Quantity: <span className="font-medium">{totalQuantity}</span>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">Inventory Distribution</CardTitle>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>不包含sample数量</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardHeader>
       <CardContent>
@@ -67,7 +83,7 @@ export function InventoryScatterChart() {
                 domain={[0, 'auto']}
                 hide={true}
               />
-              <Tooltip 
+              <RechartsTooltip 
                 cursor={{fill: 'rgba(0, 0, 0, 0.05)'}}
                 contentStyle={{
                   border: '1px solid var(--border)',

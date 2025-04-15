@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useStoreView } from "./store-context";
 
-// 客户端组件不会在服务器端渲染
+// Import the map component dynamically
 const MapComponents = dynamic(
   () => import("@/components/map-components"),
   { 
@@ -19,7 +19,7 @@ const MapComponents = dynamic(
   }
 );
 
-interface StoreMapProps {
+interface StoreMapWrapperProps {
   className?: string;
 }
 
@@ -101,7 +101,7 @@ const calculateMapCenter = (locations: StoreLocation[]) => {
   ];
 };
 
-export function StoreMap({ className }: StoreMapProps) {
+export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
   const { storeId, isAddStoreOpen, setStoreId, setViewMode, setIsAddStoreOpen } = useStoreView();
   const [storeLocations, setStoreLocations] = React.useState<StoreLocation[]>(mockStoreLocations);
   const [selectedStore, setSelectedStore] = React.useState<StoreLocation | null>(null);
@@ -142,21 +142,4 @@ export function StoreMap({ className }: StoreMapProps) {
       </CardContent>
     </Card>
   );
-}
-
-// 添加到你的全局CSS文件中
-// .store-popup .leaflet-popup-content-wrapper {
-//   border-radius: 0.5rem;
-//   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-// }
-// 
-// .store-popup .leaflet-popup-content {
-//   margin: 12px 16px;
-//   line-height: 1.5;
-// }
-//
-// .custom-marker-icon {
-//   display: flex;
-//   align-items: center;
-//   justify-content: center;
-// }
+} 

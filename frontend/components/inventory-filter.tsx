@@ -21,16 +21,13 @@ const stores = [
 ];
 
 // 创建一个context来全局管理Inventory的视图模式
-export const InventoryViewContext = React.createContext<{
-  viewMode: "total" | "by-store";
-  storeId: string;
-  setViewMode: React.Dispatch<React.SetStateAction<"total" | "by-store">>;
-  setStoreId: React.Dispatch<React.SetStateAction<string>>;
-}>({
-  viewMode: "total",
+export type ViewMode = "total" | "by-store";
+
+export const InventoryViewContext = React.createContext({
+  viewMode: "total" as ViewMode,
   storeId: "all",
-  setViewMode: () => {},
-  setStoreId: () => {},
+  setViewMode: (() => {}) as React.Dispatch<React.SetStateAction<ViewMode>>,
+  setStoreId: (() => {}) as React.Dispatch<React.SetStateAction<string>>,
 });
 
 export function InventoryFilter() {

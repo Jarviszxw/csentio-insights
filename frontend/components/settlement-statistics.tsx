@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useDateRange } from "./date-range-context";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 type MetricData = {
   value: number;
@@ -100,57 +110,80 @@ export function SettlementStatistics() {
     */
   }, [dateRange]);
 
+  const formatPercentage = (percentage: number): string => {
+    return `${percentage > 0 ? "+" : ""}${percentage}%`;
+  };
+
+  const formattedGMV = `¥${gmvData.value.toLocaleString()}`;
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total GMV</CardTitle>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            className={`h-4 w-4 ${gmvData.trend === "up" ? "text-green-500" : "text-red-500"}`}
-          >
-            <path d={gmvData.trend === "up" ? "M7 17l5-5 5 5" : "M7 7l5 5 5-5"} />
-          </svg>
+    <div className="flex w-full gap-4 overflow-x-auto [&>*]:min-w-[280px] [&>*]:flex-1">
+      <Card className="@container/card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardDescription className="text-l font-semibold tabular-nums">Total GMV</CardDescription>
+          </div>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {loading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+            ) : (
+              formattedGMV
+            )}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline" className="border-none">
+              {gmvData.trend === 'up' ? (
+                <IconTrendingUp />
+              ) : (
+                <IconTrendingDown />
+              )}
+              {formatPercentage(gmvData.percentage)}
+            </Badge>
+          </CardAction>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">¥{gmvData.value.toLocaleString()}</div>
-          <p className="text-xs text-muted-foreground">
-            {gmvData.percentage > 0 
-              ? `+${gmvData.percentage}%` 
-              : `${gmvData.percentage}%`} from previous period
-          </p>
-        </CardContent>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            {gmvData.trend === 'up' ? (
+              <>Trending up {formatPercentage(gmvData.percentage)} this period <IconTrendingUp className="size-4" /></>
+            ) : (
+              <>Down {formatPercentage(gmvData.percentage)} this period <IconTrendingDown className="size-4" /></>
+            )}
+          </div>
+        </CardFooter>
       </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            className={`h-4 w-4 ${salesData.trend === "up" ? "text-green-500" : "text-red-500"}`}
-          >
-            <path d={salesData.trend === "up" ? "M7 17l5-5 5 5" : "M7 7l5 5 5-5"} />
-          </svg>
+      
+      <Card className="@container/card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardDescription className="text-l font-semibold tabular-nums">Total Sales</CardDescription>
+          </div>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {loading ? (
+              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+            ) : (
+              salesData.value
+            )}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline" className="border-none">
+              {salesData.trend === 'up' ? (
+                <IconTrendingUp />
+              ) : (
+                <IconTrendingDown />
+              )}
+              {formatPercentage(salesData.percentage)}
+            </Badge>
+          </CardAction>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{salesData.value.toLocaleString()}</div>
-          <p className="text-xs text-muted-foreground">
-            {salesData.percentage > 0 
-              ? `+${salesData.percentage}%` 
-              : `${salesData.percentage}%`} from previous period
-          </p>
-        </CardContent>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            {salesData.trend === 'up' ? (
+              <>Trending up {formatPercentage(salesData.percentage)} this period <IconTrendingUp className="size-4" /></>
+            ) : (
+              <>Down {formatPercentage(salesData.percentage)} this period <IconTrendingDown className="size-4" /></>
+            )}
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );

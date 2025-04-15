@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, PenSquare, Trash2 } from "lucide-react";
+import { Plus, PenSquare } from "lucide-react";
 import { format } from "date-fns";
 import {
   Pagination,
@@ -135,6 +135,8 @@ const products = [
   { id: "prod-002", name: "Product Beta", code: "SK-002", price: 120.00 },
   { id: "prod-003", name: "Product Gamma", code: "SK-003", price: 80.00 },
   { id: "prod-004", name: "Product Delta", code: "SK-004", price: 150.00 },
+  { id: "prod-005", name: "Product Epsilon", code: "SK-005", price: 90.00 },
+  { id: "prod-006", name: "Product Zeta", code: "SK-006", price: 110.00 },
 ];
 
 export function SettlementRecordsTable() {
@@ -150,6 +152,7 @@ export function SettlementRecordsTable() {
     quantity: 1,
     price: 0
   });
+  const [selectedProducts, setSelectedProducts] = React.useState<string[]>([]);
   
   const itemsPerPage = 5;
   
@@ -200,14 +203,14 @@ export function SettlementRecordsTable() {
     };
     
     setRecords([...records, newSettlementRecord]);
+    setIsAddDialogOpen(false);
     setNewRecord({
       settle_date: new Date().toISOString().split('T')[0],
       quantity: 1,
       price: 0
     });
-    setIsAddDialogOpen(false);
   };
-
+  
   // 编辑记录处理函数
   const handleEditRecord = () => {
     if (!selectedRecord) return;
@@ -217,19 +220,19 @@ export function SettlementRecordsTable() {
     );
     
     setRecords(updatedRecords);
-    setSelectedRecord(null);
     setIsEditDialogOpen(false);
-  };
-
-  // 删除记录处理函数
-  const handleDeleteRecord = (id: string) => {
-    const updatedRecords = records.filter(record => record.id !== id);
-    setRecords(updatedRecords);
+    setSelectedRecord(null);
   };
   
-  // 处理产品选择变更，自动更新SKU和价格
+  // 删除记录处理函数
+  const handleDeleteRecord = (id: string) => {
+    setRecords(records.filter(record => record.id !== id));
+  };
+  
+  // 产品更改处理函数
   const handleProductChange = (productName: string, isEdit: boolean = false) => {
     const product = products.find(p => p.name === productName);
+    
     if (product) {
       if (isEdit && selectedRecord) {
         setSelectedRecord({
@@ -248,134 +251,47 @@ export function SettlementRecordsTable() {
       }
     }
   };
-
+  
+  // 处理多产品选择
+  const handleProductsChange = (productNames: string[]) => {
+    setSelectedProducts(productNames);
+    // 更新新记录中的产品信息，这里简化处理，实际可能需要更复杂的逻辑
+    if (productNames.length > 0) {
+      const firstProduct = products.find(p => p.name === productNames[0]);
+      if (firstProduct) {
+        setNewRecord({
+          ...newRecord,
+          sku_name: firstProduct.name,
+          sku_code: firstProduct.code,
+          price: firstProduct.price
+        });
+      }
+    }
+  };
+  
+  // 格式化日期
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return format(date, "yyyy-MM-dd HH:mm");
+    return format(new Date(dateString), "yyyy-MM-dd HH:mm");
   };
-
+  
+  // 格式化货币
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('zh-CN', {
-      style: 'currency',
-      currency: 'CNY',
-      minimumFractionDigits: 2
-    }).format(amount);
+    return `¥${amount.toFixed(2)}`;
   };
-
+  
   return (
     <Card className="w-full">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-base">Settlement Records</CardTitle>
         <div className="flex items-center gap-2">
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-1">
-                <Plus className="h-4 w-4" />
-                Add Record
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Settlement Record</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="settle_date">Settlement Date</Label>
-                    <Input
-                      id="settle_date"
-                      type="date"
-                      value={newRecord.settle_date || ''}
-                      onChange={(e) => setNewRecord({...newRecord, settle_date: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="store">Store</Label>
-                    <Select
-                      value={newRecord.store || ''}
-                      onValueChange={(value) => setNewRecord({...newRecord, store: value})}
-                    >
-                      <SelectTrigger id="store">
-                        <SelectValue placeholder="Select store" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stores.map((store) => (
-                          <SelectItem key={store.id} value={store.name}>
-                            {store.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="product">Product</Label>
-                    <Select
-                      value={newRecord.sku_name || ''}
-                      onValueChange={(value) => handleProductChange(value)}
-                    >
-                      <SelectTrigger id="product">
-                        <SelectValue placeholder="Select product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.name}>
-                            {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sku_code">SKU Code</Label>
-                    <Input
-                      id="sku_code"
-                      value={newRecord.sku_code || ''}
-                      readOnly
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      min="1"
-                      value={newRecord.quantity || ''}
-                      onChange={(e) => setNewRecord({...newRecord, quantity: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Price</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newRecord.price || ''}
-                      onChange={(e) => setNewRecord({...newRecord, price: Number(e.target.value)})}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="remarks">Remarks</Label>
-                  <Input
-                    id="remarks"
-                    value={newRecord.remarks || ''}
-                    onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleAddRecord}>Save</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" variant="outline" className="gap-1" onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add
+          </Button>
+          {/* <Button size="sm" variant="outline" className="gap-1">
+            <PenSquare className="h-4 w-4" />
+            Edit
+          </Button> */}
         </div>
       </CardHeader>
       <CardContent>
@@ -383,10 +299,10 @@ export function SettlementRecordsTable() {
           <TableHeader>
             <TableRow>
               <TableHead>Create Time</TableHead>
-              <TableHead>Settlement Date</TableHead>
+              <TableHead>Settle Date</TableHead>
               <TableHead>Store</TableHead>
               <TableHead>Product</TableHead>
-              <TableHead>Quantity</TableHead>
+              <TableHead className="text-right">Quantity</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Remarks</TableHead>
               <TableHead>Created By</TableHead>
@@ -396,7 +312,7 @@ export function SettlementRecordsTable() {
           <TableBody>
             {currentRecords.map((record) => (
               <TableRow key={record.id}>
-                <TableCell className="font-medium">
+                <TableCell>
                   {formatDate(record.create_time)}
                 </TableCell>
                 <TableCell>
@@ -435,14 +351,6 @@ export function SettlementRecordsTable() {
                     >
                       <PenSquare className="h-4 w-4" />
                       <span className="sr-only">Edit</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteRecord(record.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete</span>
                     </Button>
                   </div>
                 </TableCell>
@@ -502,6 +410,101 @@ export function SettlementRecordsTable() {
           </div>
         )}
       </CardContent>
+
+      {/* Add Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Settlement Record</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="settle_date">Settlement Date</Label>
+                <Input
+                  id="settle_date"
+                  type="date"
+                  value={newRecord.settle_date || ''}
+                  onChange={(e) => setNewRecord({...newRecord, settle_date: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="store">Store</Label>
+                <Select
+                  value={newRecord.store || ''}
+                  onValueChange={(value) => setNewRecord({...newRecord, store: value})}
+                >
+                  <SelectTrigger id="store">
+                    <SelectValue placeholder="Select store" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((store) => (
+                      <SelectItem key={store.id} value={store.name}>
+                        {store.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="products">Products (Multiple Selection)</Label>
+              <Select
+                value={newRecord.sku_name || ''}
+                onValueChange={(value) => handleProductChange(value)}
+              >
+                <SelectTrigger id="products">
+                  <SelectValue placeholder="Select products" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={product.name}>
+                      {product.name} ({product.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={newRecord.quantity || ''}
+                  onChange={(e) => setNewRecord({...newRecord, quantity: Number(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="price">Price</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newRecord.price || ''}
+                  onChange={(e) => setNewRecord({...newRecord, price: Number(e.target.value)})}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="remarks">Remarks</Label>
+              <Input
+                id="remarks"
+                value={newRecord.remarks || ''}
+                onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddRecord}>Add Record</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       {selectedRecord && (

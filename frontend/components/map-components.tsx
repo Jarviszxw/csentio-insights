@@ -1,13 +1,36 @@
 "use client";
 
 import * as React from "react";
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { Store, MapPin, Phone } from "lucide-react";
+import { Store, MapPin, Phone, Edit, PlusCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
 
-// 自定义标记图标
+// Fix the marker icon issue in Leaflet with Next.js
+function MapIconSetup() {
+  React.useEffect(() => {
+    (async function init() {
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+      });
+    })();
+  }, []);
+  
+  return null;
+}
+
+// Custom marker icon
 const createCustomIcon = (isActive: boolean) => {
   return L.divIcon({
     className: 'custom-marker-icon',
@@ -20,8 +43,8 @@ const createCustomIcon = (isActive: boolean) => {
   });
 };
 
-// Define the store data structure - should match the one in store-map.tsx
-interface StoreLocation {
+// Define the store data structure
+export interface StoreLocation {
   id: number;
   store_name: string;
   address: string;
@@ -31,66 +54,91 @@ interface StoreLocation {
   longitude: number;
 }
 
-interface MapComponentsProps {
+export interface MapComponentsProps {
   center: number[];
   locations: StoreLocation[];
   onSelectStore: (store: StoreLocation | null) => void;
 }
 
-export default function MapComponents({ center, locations, onSelectStore }: MapComponentsProps) {
+// Map click handler component
+function MapClickHandler({ onAddLocationAt }: { onAddLocationAt: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    contextmenu(e: { latlng: { lat: number; lng: number } }) {
+      const { lat, lng } = e.latlng;
+      onAddLocationAt(lat, lng);
+    },
+  });
+  
+  return null;
+}
+
+export default function(props: MapComponentsProps) {
+  const { center, locations, onSelectStore } = props;
+  
   return (
-    <MapContainer 
-      center={[center[0], center[1]]} 
-      zoom={4} 
-      scrollWheelZoom={true}
-      style={{ height: "100%", width: "100%", borderRadius: "0.5rem" }}
-      zoomControl={false}
-    >
-      {/* 更美观的地图样式 */}
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | <a href="https://www.mapbox.com/">Mapbox</a>'
-        url="https://api.mapbox.com/styles/v1/mapbox/light-v10/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
-      />
+    <div className="relative h-full w-full">
+      {/* Initialize Leaflet icons */}
+      <MapIconSetup />
       
-      {/* 将放大缩小控件放到右上角 */}
-      <ZoomControl position="topright" />
-      
-      {locations.map((store) => (
-        <Marker 
-          key={store.id}
-          position={[store.latitude, store.longitude]}
-          icon={createCustomIcon(store.is_active)}
-          eventHandlers={{
-            click: () => {
-              onSelectStore(store);
-            },
-          }}
-        >
-          <Popup className="store-popup">
-            <div className="min-w-[220px]">
-              <h3 className="font-semibold text-base mb-2 pb-2 border-b flex items-center gap-2">
-                <Store className="h-4 w-4" />
-                {store.store_name}
-              </h3>
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                  <span className="text-sm">{store.address}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{store.contact_info}</span>
-                </div>
-                <div className="pt-2">
+      <MapContainer 
+        center={[center[0], center[1]]} 
+        zoom={4} 
+        scrollWheelZoom={true}
+        style={{ height: "100%", width: "100%", borderRadius: "0.5rem" }}
+        zoomControl={false}
+        className="z-0"
+      >
+        {/* Map style */}
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | <a href="https://carto.com/">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+        />
+        
+        <ZoomControl position="topright" />
+        
+        {locations.map((store) => (
+          <Marker 
+            key={store.id}
+            position={[store.latitude, store.longitude]}
+            icon={createCustomIcon(store.is_active)}
+            eventHandlers={{
+              click: () => {
+                onSelectStore(store);
+              },
+            }}
+          >
+            <Popup className="store-popup">
+              <div className="min-w-[220px]">
+                <h3 className="font-semibold text-base mb-2 pb-2 border-b flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Store className="h-4 w-4" />
+                    {store.store_name}
+                  </div>
                   <Badge variant={store.is_active ? "default" : "secondary"} className="text-xs">
                     {store.is_active ? "Active" : "Inactive"}
                   </Badge>
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <span className="text-sm">{store.address}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">{store.contact_info}</span>
+                  </div>
+                  <div className="pt-2 flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => onSelectStore(store)}>
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
   );
 } 

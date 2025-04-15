@@ -28,6 +28,14 @@ import {
     PaginationNext,
     PaginationPrevious,
   } from "@/components/ui/pagination";
+  import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+  import { Label } from "@/components/ui/label";
+  import { Input } from "@/components/ui/input";
+  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+  import { DatePicker } from "@/components/ui/date-picker";
+  import { ScrollArea } from "@/components/ui/scroll-area";
+  import { Checkbox } from "@/components/ui/checkbox";
+  import { X } from "lucide-react";
   
   interface InventoryRecord {
     id: string;
@@ -39,6 +47,7 @@ import {
     trackingNo?: string;
     remarks?: string;
     createdBy: string;
+    inventory_date: string;
   }
   
   const mockRecords: InventoryRecord[] = [
@@ -51,7 +60,8 @@ import {
       quantity: 50,
       trackingNo: "TRK-123456",
       remarks: "Regular stock refill",
-      createdBy: "John Doe"
+      createdBy: "John Doe",
+      inventory_date: "2023-06-15"
     },
     {
       id: "INV-002",
@@ -62,7 +72,8 @@ import {
       quantity: 30,
       trackingNo: "TRK-789012",
       remarks: "Express delivery",
-      createdBy: "Jane Smith"
+      createdBy: "Jane Smith",
+      inventory_date: "2023-06-16"
     },
     {
       id: "INV-003",
@@ -72,7 +83,8 @@ import {
       skuCode: "SK-003",
       quantity: 20,
       trackingNo: "TRK-345678",
-      createdBy: "Alice Johnson"
+      createdBy: "Alice Johnson",
+      inventory_date: "2023-06-18"
     },
     {
       id: "INV-004",
@@ -82,7 +94,8 @@ import {
       skuCode: "SK-004", 
       quantity: 15,
       remarks: "Special order",
-      createdBy: "Bob Wilson"
+      createdBy: "Bob Wilson",
+      inventory_date: "2023-06-20"
     },
     {
       id: "INV-005",
@@ -92,7 +105,8 @@ import {
       skuCode: "SK-001",
       quantity: 25,
       trackingNo: "TRK-901234",
-      createdBy: "Charlie Brown"
+      createdBy: "Charlie Brown",
+      inventory_date: "2023-06-22"
     },
     {
       id: "INV-006",
@@ -103,7 +117,8 @@ import {
       quantity: 40,
       trackingNo: "TRK-567890",
       remarks: "Urgent delivery",
-      createdBy: "David Lee"
+      createdBy: "David Lee",
+      inventory_date: "2023-06-25"
     },
     {
       id: "INV-007",
@@ -113,7 +128,8 @@ import {
       skuCode: "SK-003",
       quantity: 35,
       trackingNo: "TRK-234567",
-      createdBy: "Emma Wilson"
+      createdBy: "Emma Wilson",
+      inventory_date: "2023-06-27"
     },
     {
       id: "INV-008",
@@ -123,13 +139,42 @@ import {
       skuCode: "SK-004",
       quantity: 22,
       remarks: "Monthly restock",
-      createdBy: "Frank Zhang"
+      createdBy: "Frank Zhang",
+      inventory_date: "2023-06-29"
     }
+  ];
+
+  // 模拟店铺数据
+  const stores = [
+    { id: "store-a", name: "Store A" },
+    { id: "store-b", name: "Store B" },
+    { id: "store-c", name: "Store C" },
+  ];
+  
+  // 模拟产品数据
+  const products = [
+    { id: "prod-001", name: "Product Alpha", code: "SK-001" },
+    { id: "prod-002", name: "Product Beta", code: "SK-002" },
+    { id: "prod-003", name: "Product Gamma", code: "SK-003" },
+    { id: "prod-004", name: "Product Delta", code: "SK-004" },
+    { id: "prod-005", name: "Product Epsilon", code: "SK-005" },
+    { id: "prod-006", name: "Product Zeta", code: "SK-006" },
   ];
   
   export function InventoryRecordsTable() {
     const [records, setRecords] = React.useState<InventoryRecord[]>(mockRecords);
     const [currentPage, setCurrentPage] = React.useState(1);
+    const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+    const [selectedItems, setSelectedItems] = React.useState<string[]>([]);
+    const [selectedRecord, setSelectedRecord] = React.useState<InventoryRecord | null>(null);
+    const [newRecord, setNewRecord] = React.useState<Partial<InventoryRecord>>({
+      quantity: 1
+    });
+    const [selectedProducts, setSelectedProducts] = React.useState<string[]>([]);
+    const [selectedProductQuantities, setSelectedProductQuantities] = React.useState<Record<string, number>>({});
+    const [inventoryDate, setInventoryDate] = React.useState<Date | undefined>(new Date());
+    
     const itemsPerPage = 5;
     
     // 按createTime从新到旧排序
@@ -153,18 +198,103 @@ import {
       setCurrentPage(page);
     };
 
+    // Handle adding multiple products at once
+    const handleAddRecord = () => {
+      // Create records for each selected product
+      const newRecords = selectedProducts.map((productName, index) => {
+        const product = products.find(p => p.name === productName);
+        const quantity = selectedProductQuantities[productName] || 1;
+        
+        return {
+          id: `INV-${String(records.length + index + 1).padStart(3, '0')}`,
+          createTime: new Date().toISOString(),
+          inventory_date: inventoryDate ? format(inventoryDate, 'yyyy-MM-dd') : new Date().toISOString().split('T')[0],
+          store: newRecord.store || 'Store A',
+          skuName: product?.name || '',
+          skuCode: product?.code || '',
+          quantity: quantity,
+          remarks: newRecord.remarks,
+          createdBy: 'Current User'
+        };
+      });
+      
+      setRecords([...records, ...newRecords]);
+      setIsAddDialogOpen(false);
+      setNewRecord({
+        quantity: 1
+      });
+      setSelectedProducts([]);
+      setSelectedProductQuantities({});
+    };
+    
+    // Toggle product selection
+    const handleProductSelect = (productName: string, isChecked: boolean) => {
+      if (isChecked) {
+        setSelectedProducts(prev => [...prev, productName]);
+        // Set default quantity to 1
+        setSelectedProductQuantities(prev => ({
+          ...prev,
+          [productName]: 1
+        }));
+      } else {
+        setSelectedProducts(prev => prev.filter(p => p !== productName));
+        // Remove quantity for this product
+        const updatedQuantities = { ...selectedProductQuantities };
+        delete updatedQuantities[productName];
+        setSelectedProductQuantities(updatedQuantities);
+      }
+    };
+    
+    // Update quantity for a specific product
+    const handleQuantityChange = (productName: string, quantity: number) => {
+      setSelectedProductQuantities(prev => ({
+        ...prev,
+        [productName]: quantity
+      }));
+    };
+    
+    // 编辑记录处理函数
+    const handleEditRecord = () => {
+      if (!selectedRecord) return;
+      
+      const updatedRecords = records.map(record => 
+        record.id === selectedRecord.id ? selectedRecord : record
+      );
+      
+      setRecords(updatedRecords);
+      setIsEditDialogOpen(false);
+      setSelectedRecord(null);
+    };
+
+    // 产品更改处理函数
+    const handleProductChange = (productName: string, isEdit: boolean = false) => {
+      const product = products.find(p => p.name === productName);
+      
+      if (product) {
+        if (isEdit && selectedRecord) {
+          setSelectedRecord({
+            ...selectedRecord,
+            skuName: product.name,
+            skuCode: product.code
+          });
+        } else {
+          setNewRecord({
+            ...newRecord,
+            skuName: product.name,
+            skuCode: product.code
+          });
+        }
+      }
+    };
+
     return (
       <Card className="w-full">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Inventory Records</CardTitle>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-1">
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => setIsAddDialogOpen(true)}>
               <Plus className="h-4 w-4" />
-              Add Record
-            </Button>
-            <Button size="sm" variant="outline" className="gap-1">
-              <PenSquare className="h-4 w-4" />
-              Edit
+              Add
             </Button>
           </div>
         </CardHeader>
@@ -173,12 +303,13 @@ import {
             <TableHeader>
               <TableRow>
                 <TableHead>Create Time</TableHead>
+                <TableHead>Inventory Date</TableHead>
                 <TableHead>Store</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
-                <TableHead>Tracking No.</TableHead>
                 <TableHead>Remarks</TableHead>
                 <TableHead>Created By</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -186,6 +317,9 @@ import {
                 <TableRow key={record.id}>
                   <TableCell className="font-medium">
                     {format(new Date(record.createTime), "yyyy-MM-dd HH:mm")}
+                  </TableCell>
+                  <TableCell>
+                    {format(new Date(record.inventory_date), "yyyy-MM-dd")}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{record.store}</Badge>
@@ -199,13 +333,23 @@ import {
                   <TableCell className="text-right font-medium">
                     {record.quantity}
                   </TableCell>
-                  <TableCell>
-                    {record.trackingNo || "-"}
-                  </TableCell>
                   <TableCell className="max-w-[200px] truncate">
                     {record.remarks || "-"}
                   </TableCell>
                   <TableCell>{record.createdBy}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setSelectedRecord(record);
+                        setIsEditDialogOpen(true);
+                      }}
+                    >
+                      <PenSquare className="h-4 w-4" />
+                      <span className="sr-only">Edit</span>
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -266,6 +410,228 @@ import {
             </div>
           )}
         </CardContent>
+
+        {/* Add Dialog */}
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle>Add Inventory Record</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="inventory_date">Inventory Date</Label>
+                  <DatePicker
+                    date={inventoryDate} 
+                    setDate={setInventoryDate} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="store">Store</Label>
+                  <Select
+                    value={newRecord.store || ''}
+                    onValueChange={(value) => setNewRecord({...newRecord, store: value})}
+                  >
+                    <SelectTrigger id="store">
+                      <SelectValue placeholder="Select store" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={store.name}>
+                          {store.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Products (Multiple Selection)</Label>
+                <ScrollArea className="h-[180px] border rounded-md p-2">
+                  <div className="space-y-2">
+                    {products.map((product) => {
+                      const isSelected = selectedProducts.includes(product.name);
+                      return (
+                        <div key={product.id} className="flex flex-col space-y-1.5">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox 
+                              id={`product-${product.id}`} 
+                              checked={isSelected}
+                              onCheckedChange={(checked) => 
+                                handleProductSelect(product.name, checked as boolean)
+                              }
+                            />
+                            <Label htmlFor={`product-${product.id}`} className="flex-1">
+                              {product.name} ({product.code})
+                            </Label>
+                            
+                            {isSelected && (
+                              <div className="flex items-center space-x-2">
+                                <Label className="text-xs">Quantity:</Label>
+                                <Input 
+                                  type="number" 
+                                  min="1"
+                                  className="w-20 h-8"
+                                  value={selectedProductQuantities[product.name] || 1}
+                                  onChange={(e) => handleQuantityChange(
+                                    product.name, 
+                                    parseInt(e.target.value) || 1
+                                  )}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+                
+                {selectedProducts.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-sm font-medium mb-1">Selected Products: {selectedProducts.length}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedProducts.map((productName) => {
+                        const product = products.find(p => p.name === productName);
+                        const quantity = selectedProductQuantities[productName] || 1;
+                        return (
+                          <Badge key={productName} variant="secondary" className="flex items-center gap-1">
+                            {productName} (Qty: {quantity})
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-4 w-4 ml-1 p-0"
+                              onClick={() => handleProductSelect(productName, false)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="remarks">Remarks</Label>
+                <Input
+                  id="remarks"
+                  value={newRecord.remarks || ''}
+                  onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddRecord} disabled={selectedProducts.length === 0}>Add Records</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        {selectedRecord && (
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Inventory Record</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_inventory_date">Inventory Date</Label>
+                    <DatePicker 
+                      date={selectedRecord ? new Date(selectedRecord.inventory_date) : undefined} 
+                      setDate={(date) => {
+                        if (date && selectedRecord) {
+                          setSelectedRecord({
+                            ...selectedRecord, 
+                            inventory_date: format(date, 'yyyy-MM-dd')
+                          });
+                        }
+                      }} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_store">Store</Label>
+                    <Select
+                      value={selectedRecord.store}
+                      onValueChange={(value) => setSelectedRecord({...selectedRecord, store: value})}
+                    >
+                      <SelectTrigger id="edit_store">
+                        <SelectValue placeholder="Select store" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.name}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_product">Product</Label>
+                    <Select
+                      value={selectedRecord.skuName}
+                      onValueChange={(value) => handleProductChange(value, true)}
+                    >
+                      <SelectTrigger id="edit_product">
+                        <SelectValue placeholder="Select product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.name}>
+                            {product.name} ({product.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_quantity">Quantity</Label>
+                    <Input
+                      id="edit_quantity"
+                      type="number"
+                      min="1"
+                      value={selectedRecord.quantity}
+                      onChange={(e) => setSelectedRecord({...selectedRecord, quantity: Number(e.target.value)})}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_tracking_no">Tracking No.</Label>
+                    <Input
+                      id="edit_tracking_no"
+                      value={selectedRecord.trackingNo || ''}
+                      onChange={(e) => setSelectedRecord({...selectedRecord, trackingNo: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_remarks">Remarks</Label>
+                    <Input
+                      id="edit_remarks"
+                      value={selectedRecord.remarks || ''}
+                      onChange={(e) => setSelectedRecord({...selectedRecord, remarks: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditRecord}>Save Changes</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </Card>
     );
   }
