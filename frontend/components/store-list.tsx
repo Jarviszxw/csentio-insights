@@ -397,11 +397,11 @@ export function StoreList({ className }: StoreListProps) {
                   value={statusFilter} 
                   onValueChange={setStatusFilter}
                 >
-                  <SelectTrigger id="status-filter" className="w-[140px]">
+                  <SelectTrigger id="status-filter" className="min-w-[80px] text-center">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectContent className="justify-center">
+                    <SelectItem value="all">All</SelectItem>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
@@ -413,11 +413,11 @@ export function StoreList({ className }: StoreListProps) {
                   value={cityFilter} 
                   onValueChange={setCityFilter}
                 >
-                  <SelectTrigger id="city-filter" className="w-[160px]">
+                  <SelectTrigger id="city-filter" className="min-w-[80px] text-center">
                     <SelectValue placeholder="Select city" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Cities</SelectItem>
+                  <SelectContent className="justify-center">
+                    <SelectItem value="all">All</SelectItem>
                     {cities.map(city => (
                       <SelectItem key={city} value={city}>
                         {city}
@@ -477,9 +477,124 @@ export function StoreList({ className }: StoreListProps) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="icon" onClick={() => handleEditStore(store)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="icon" onClick={() => handleEditStore(store)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                              <DialogTitle>Edit Store</DialogTitle>
+                              <DialogDescription>
+                                Update the details of the existing store.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4 space-y-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="editStoreName">Store Name</Label>
+                                <Input 
+                                  id="editStoreName" 
+                                  placeholder="Enter store name" 
+                                  value={selectedStore?.store_name}
+                                  onChange={handleStoreNameChange}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="editAddress">Address</Label>
+                                <Textarea 
+                                  id="editAddress" 
+                                  placeholder="Enter store address" 
+                                  value={selectedStore?.address}
+                                  onChange={handleAddressChange}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="editContactInfo">Contact Information</Label>
+                                <Input 
+                                  id="editContactInfo" 
+                                  placeholder="Enter contact information" 
+                                  value={selectedStore?.contact_info}
+                                  onChange={handleContactInfoChange}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="editContractInfo">Contract Information</Label>
+                                <Textarea 
+                                  id="editContractInfo" 
+                                  placeholder="Enter contract information" 
+                                  value={selectedStore?.contractInfo}
+                                  onChange={handleContractInfoChange}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="editDocuments">Attachments</Label>
+                                <div className="border rounded-md p-2 relative">
+                                  <div className="flex flex-wrap gap-2">
+                                    {selectedStore?.documents?.length ? (
+                                      <>
+                                        {selectedStore.documents.map((doc, i) => (
+                                          <Badge key={i} variant="outline" className="flex gap-1 items-center">
+                                            <FileText className="h-3 w-3" />
+                                            {doc}
+                                            <Button 
+                                              type="button" 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
+                                              onClick={() => {
+                                                if(selectedStore) {
+                                                  setSelectedStore({
+                                                    ...selectedStore,
+                                                    documents: selectedStore.documents?.filter((_, index) => index !== i)
+                                                  });
+                                                }
+                                              }}
+                                            >
+                                              <XCircle className="h-3 w-3" />
+                                            </Button>
+                                          </Badge>
+                                        ))}
+                                      </>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">Click to choose files</p>
+                                    )}
+                                  </div>
+                                  <Input 
+                                    id="editDocuments" 
+                                    type="file" 
+                                    multiple
+                                    onChange={handleFileChange}
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-end gap-2 pt-2">
+                                <div className="flex items-center gap-2">
+                                  <Switch 
+                                    id="editActiveStatus" 
+                                    checked={selectedStore?.is_active}
+                                    onCheckedChange={(checked) => {
+                                      if (selectedStore) {
+                                        setSelectedStore({
+                                          ...selectedStore,
+                                          is_active: checked,
+                                        });
+                                      }
+                                    }}
+                                  />
+                                  <Label htmlFor="editActiveStatus" className="text-sm font-normal">
+                                    {selectedStore?.is_active ? "Active" : "Inactive"}
+                                  </Label>
+                                </div>
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setIsEditMode(false)}>Cancel</Button>
+                              <Button onClick={handleSaveStore}>Save</Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
                         <Button variant="outline" size="icon" onClick={() => handleViewDetails(store)}>
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -543,37 +658,95 @@ export function StoreList({ className }: StoreListProps) {
               />
             </div>
             <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="activeStatus">Status</Label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="activeStatus" 
+                    checked={isEditMode ? selectedStore?.is_active : newStore.is_active}
+                    onCheckedChange={(checked) => {
+                      if (isEditMode && selectedStore) {
+                        setSelectedStore({
+                          ...selectedStore,
+                          is_active: checked,
+                        });
+                      } else {
+                        setNewStore({
+                          ...newStore,
+                          is_active: checked,
+                        });
+                      }
+                    }}
+                  />
+                  <Label htmlFor="activeStatus" className="text-sm font-normal">
+                    {(isEditMode ? selectedStore?.is_active : newStore.is_active) ? "Active" : "Inactive"}
+                  </Label>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="documents">Attachments</Label>
-              <div className="flex flex-col gap-2">
-                <Input 
-                  id="documents" 
-                  type="file" 
-                  multiple
-                  onChange={handleFileChange}
-                />
-                {/* Display current documents if any */}
-                {((isEditMode && selectedStore?.documents?.length) || 
-                 (!isEditMode && newStore.documents?.length)) ? (
-                  <div className="mt-2">
-                    <p className="text-sm text-muted-foreground mb-1">Current documents:</p>
-                    <div className="flex flex-wrap gap-2">
+              <div className="border rounded-md p-2 relative">
+                <div className="flex flex-wrap gap-2">
+                  {((isEditMode && selectedStore?.documents?.length) || 
+                   (!isEditMode && newStore.documents?.length)) ? (
+                    <>
                       {isEditMode && selectedStore?.documents ? 
                         selectedStore.documents.map((doc, i) => (
                           <Badge key={i} variant="outline" className="flex gap-1 items-center">
                             <FileText className="h-3 w-3" />
                             {doc}
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
+                              onClick={() => {
+                                if(selectedStore) {
+                                  setSelectedStore({
+                                    ...selectedStore,
+                                    documents: selectedStore.documents?.filter((_, index) => index !== i)
+                                  });
+                                }
+                              }}
+                            >
+                              <XCircle className="h-3 w-3" />
+                            </Button>
                           </Badge>
                         )) :
                         newStore.documents?.map((doc, i) => (
                           <Badge key={i} variant="outline" className="flex gap-1 items-center">
                             <FileText className="h-3 w-3" />
                             {doc}
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
+                              onClick={() => {
+                                setNewStore({
+                                  ...newStore,
+                                  documents: newStore.documents?.filter((_, index) => index !== i)
+                                });
+                              }}
+                            >
+                              <XCircle className="h-3 w-3" />
+                            </Button>
                           </Badge>
                         ))
                       }
-                    </div>
-                  </div>
-                ) : null}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Click to choose files</p>
+                  )}
+                </div>
+                <Input 
+                  id="documents" 
+                  type="file" 
+                  multiple
+                  onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
               </div>
             </div>
           </div>
@@ -592,17 +765,20 @@ export function StoreList({ className }: StoreListProps) {
           <DialogHeader>
             <DialogTitle>{storeToView?.store_name}</DialogTitle>
             <DialogDescription>
-              Contract and Document Information
+              Store Details
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <h4 className="text-sm font-medium mb-1">Contract Information</h4>
-              <p className="text-sm">{storeToView?.contractInfo || "No contract information available"}</p>
+              <h4 className="text-sm font-medium mb-1">Contact Information</h4>
+              <div className="flex items-center gap-1">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <p className="text-sm">{storeToView?.contact_info || "No contact information available"}</p>
+              </div>
             </div>
             {storeToView?.documents && storeToView.documents.length > 0 && (
               <div>
-                <h4 className="text-sm font-medium mb-1">Documents</h4>
+                <h4 className="text-sm font-medium mb-1">Attachments</h4>
                 <div className="space-y-2">
                   {storeToView.documents.map((doc, i) => (
                     <div key={i} className="flex items-center gap-2">

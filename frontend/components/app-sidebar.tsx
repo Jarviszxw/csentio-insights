@@ -49,16 +49,16 @@ const data = {
       isActive: true,
     },
     {
-      title: "Inventory",
-      url: "/inventory",
-      icon: IconDatabase,
-      isActive: true,
-    },
-    {
       title: "Store",
       url: "/store",
       icon: IconChartBar,
       isActive: false,
+    },
+    {
+      title: "Inventory",
+      url: "/inventory",
+      icon: IconDatabase,
+      isActive: true,
     },
     {
       title: "Settlement",

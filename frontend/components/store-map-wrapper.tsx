@@ -5,10 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useStoreView } from "./store-context";
+import type { Store } from "@/components/map-components";
 
-// Import the map component dynamically
+// Import the map component dynamically with correct default export
 const MapComponents = dynamic(
-  () => import("@/components/map-components"),
+  () => import("@/components/map-components").then(mod => ({ default: mod.MapComponents })),
   { 
     ssr: false,
     loading: () => (
@@ -118,26 +119,50 @@ export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
     }
   }, [selectedStore, setStoreId, isAddStoreOpen, setViewMode]);
   
-  // Filter out locations with invalid coordinates
+  // Filter out locations with invalid coordinates and only active stores
   const validLocations = storeLocations.filter(
-    store => typeof store.latitude === 'number' && typeof store.longitude === 'number'
+    store => typeof store.latitude === 'number' && 
+             typeof store.longitude === 'number' && 
+             store.is_active
   );
   
   // Center map on the average position of all stores
   const center = calculateMapCenter(validLocations);
 
+  // Convert StoreLocation to Store for MapComponents
+  const stores = validLocations.map(location => ({
+    id: String(location.id),
+    name: location.store_name,
+    address: location.address,
+    city: "",
+    state: "",
+    zip: "",
+    country: "China",
+    phone: "",
+    email: location.contact_info,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    isActive: location.is_active
+  }));
+
   // Handle a store selection from the map
-  const handleSelectStore = (store: StoreLocation | null) => {
-    setSelectedStore(store);
+  const handleSelectStore = (store: Store | null) => {
+    if (store) {
+      const storeLocation = validLocations.find(loc => String(loc.id) === store.id) || null;
+      setSelectedStore(storeLocation);
+    } else {
+      setSelectedStore(null);
+    }
   };
 
   return (
     <Card className={cn("w-full h-[500px]", className)}>
       <CardContent className="h-full p-0 pt-2 overflow-hidden">
         <MapComponents 
-          center={center} 
-          locations={validLocations} 
+          center={center as [number, number]} 
+          stores={stores} 
           onSelectStore={handleSelectStore}
+          height="100%"
         />
       </CardContent>
     </Card>
