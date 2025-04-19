@@ -20,13 +20,15 @@ CREATE TABLE stores (
     store_id SERIAL PRIMARY KEY,
     store_name VARCHAR(255) NOT NULL,
     address TEXT,
-    contact_info TEXT,
     city_id INTEGER REFERENCES cities(id),
     latitude DECIMAL(9, 6), -- 存储纬度
     longitude DECIMAL(9, 6), -- 存储经度
     is_active BOOLEAN NOT NULL DEFAULT TRUE, -- 新增字段
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    contact_info TEXT,
+    contract_info TEXT,           -- 新增：合同详细信息
+    contract_file_url TEXT       -- 新增：合同文件 URL
 );
 
 -- Products 表：存储产品信息

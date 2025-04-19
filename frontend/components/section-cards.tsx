@@ -1,4 +1,3 @@
-// src/section-cards.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -21,9 +20,9 @@ import { cn } from "@/lib/utils";
 export function SectionCards() {
   const { dateRange } = useDateRange();
 
-  const [gmvData, setGmvData] = useState<GMVResponse | null>(null);
-  const [salesData, setSalesData] = useState<SalesResponse | null>(null);
-  const [storesData, setStoresData] = useState<StoresResponse | null>(null);
+  const [gmvData, setGmvData] = useState<GMVResponse>({ total_gmv: 0, pop_percentage: 0, trend: "up" });;
+  const [salesData, setSalesData] = useState<SalesResponse>({total_sales: 0, pop_percentage: 0, trend: "up"});
+  const [storesData, setStoresData] = useState<StoresResponse>({total_stores: 0, added: 0, removed: 0, net_change: 0, trend: "up"});
   const [isLoading, setIsLoading] = useState(false);
   const [lastRequestRange, setLastRequestRange] = useState<string | null>(null);
 
@@ -108,20 +107,23 @@ export function SectionCards() {
     loadData();
   }, [dateRange]);
 
-  if (!gmvData || !salesData || !storesData) {
-    return (
-      <div className="flex w-full h-[200px] items-center justify-center">
-        <Loading size="lg" />
-      </div>
-    );
-  }
+  // if (!gmvData || !salesData || !storesData) {
+  //   return (
+  //     // <div className="flex w-full h-[200px] items-center justify-center">
+  //     //   <Loading size="lg" />
+  //     // </div>
+  //     <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+  //   );
+  // }
 
-  const formattedGMV = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'usd',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(gmvData.total_gmv);
+  // const formattedGMV = new Intl.NumberFormat('en-US', {
+  //   style: 'currency',
+  //   currency: 'CNY',
+  //   minimumFractionDigits: 2,
+  //   maximumFractionDigits: 2
+  // }).format(gmvData.total_gmv);
+
+  const formattedGMV = `¥${gmvData.total_gmv.toLocaleString()}`;
 
   const formatPercentage = (pop_percentage: number | string): string => {
     if (typeof pop_percentage === "number") {
@@ -137,9 +139,9 @@ export function SectionCards() {
           <div className="flex items-center justify-between">
             <CardDescription className="text-l font-semibold tabular-nums">Total GMV</CardDescription>
           </div>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {isLoading ? (
-              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+              <div className="mt-2 h-10 w-30 bg-muted animate-pulse rounded"></div>
             ) : (
               formattedGMV
             )}
@@ -174,9 +176,9 @@ export function SectionCards() {
           <div className="flex items-center justify-between">
             <CardDescription className="text-l font-semibold tabular-nums">Total Sales</CardDescription>
           </div>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {isLoading ? (
-              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+              <div className="mt-2 h-10 w-30 bg-muted animate-pulse rounded"></div>
             ) : (
               salesData.total_sales
             )}
@@ -209,9 +211,9 @@ export function SectionCards() {
       <Card className="@container/card">
         <CardHeader>
           <CardDescription className="text-l font-semibold tabular-nums">Total Stores</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {isLoading ? (
-              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+              <div className="mt-2 h-10 w-30 bg-muted animate-pulse rounded"></div>
             ) : (
               storesData.total_stores
             )}

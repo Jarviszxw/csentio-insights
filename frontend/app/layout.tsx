@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeScript } from "./theme-script";
 import { DateRangeProvider } from "@/components/date-range-context";
+import { Toaster } from "@/components/ui/sonner";
 import "leaflet/dist/leaflet.css";
 
 const geistSans = Geist({
@@ -37,6 +38,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <DateRangeProvider>{children}</DateRangeProvider>
+        <Toaster />
       </body>
     </html>
   );

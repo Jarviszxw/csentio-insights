@@ -17,9 +17,7 @@ async def get_total_sales(
     end_date: Optional[date] = None
 ):
     logger.info(f"API Call /api/metrics/total-sales: Get total sales from {start_date} to {end_date}")
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(status_code=400, detail="start_date must be less than or equal to end_date")
-        
+
     return await metrics_service.get_total_sales(supabase, start_date, end_date)
 
 @router.get("/total-gmv")

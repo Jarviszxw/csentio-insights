@@ -123,9 +123,9 @@ export function SettlementStatistics() {
           <div className="flex items-center justify-between">
             <CardDescription className="text-l font-semibold tabular-nums">Total GMV</CardDescription>
           </div>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {loading ? (
-              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+              <div className="mt-2 h-8 w-20 bg-muted animate-pulse rounded"></div>
             ) : (
               formattedGMV
             )}
@@ -157,9 +157,9 @@ export function SettlementStatistics() {
           <div className="flex items-center justify-between">
             <CardDescription className="text-l font-semibold tabular-nums">Total Sales</CardDescription>
           </div>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {loading ? (
-              <div className="h-8 w-20 bg-muted animate-pulse rounded"></div>
+              <div className="mt-2 h-8 w-20 bg-muted animate-pulse rounded"></div>
             ) : (
               salesData.value
             )}

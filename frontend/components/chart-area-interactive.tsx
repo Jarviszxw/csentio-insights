@@ -109,7 +109,7 @@ export function ChartAreaInteractive() {
   const salesScaleFactor = 50;
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card overflow-hidden">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardDescription className="text-base font-semibold tabular-nums text-foreground">
@@ -119,15 +119,15 @@ export function ChartAreaInteractive() {
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         {isLoading ? (
-          <div className="flex h-[250px] items-center justify-center">
+          <div className="aspect-auto h-[250px] flex items-center justify-center">
             <Loading size="lg" />
           </div>
         ) : (
           <ChartContainer 
             config={chartConfig}
-            className="aspect-auto h-[250px] w-full"
+            className="aspect-auto h-[250px]"
           >
-            <AreaChart 
+            <AreaChart
               data={chartData}
               margin={{ left: 10, right: 10, top: 10, bottom: 0 }}
             >
@@ -179,7 +179,7 @@ export function ChartAreaInteractive() {
               />
               <ChartTooltip
                 cursor={false}
-                defaultIndex={isMobile ? -1 : chartData.length > 10 ? 10 : chartData.length - 1}
+                //defaultIndex={isMobile ? -1 : chartData.length > 10 ? 10 : chartData.length - 1}
                 content={
                   <ChartTooltipContent
                     labelFormatter={(value) => {

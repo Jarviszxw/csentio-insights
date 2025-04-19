@@ -20,6 +20,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Loading } from "@/components/ui/loading";
+import { Skeleton } from "./ui/skeleton";
 
 interface ChartData {
   product: string;
@@ -136,9 +137,11 @@ export function GMVByProductChart({ externalData, skipLoading = false }: GMVByPr
       </CardHeader>
       <CardContent>
         {showLoading ? (
-          <div className="flex h-[300px] items-center justify-center">
-            <Loading size="lg" />
-          </div>
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-[300px]" />
+            <Skeleton className="h-16 w-[300px]" />
+            <Skeleton className="h-16 w-[300px]" />
+        </div>
         ) : (
           <ChartContainer config={chartConfig}>
             <BarChart

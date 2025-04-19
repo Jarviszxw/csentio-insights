@@ -14,7 +14,7 @@ class SettlementItem(BaseModel):
     product_id: int
     quantity: int
     price: float
-
+ 
 class SalesMetrics(BaseModel):
     total_sales: int
     pop_percentage: float = 0

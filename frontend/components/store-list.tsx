@@ -12,16 +12,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -33,9 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Table, 
   TableBody, 
@@ -47,15 +35,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Store, 
   MapPin, 
   Phone, 
   Calendar, 
   CheckCircle, 
   XCircle,
-  Trash2,
   Edit,
-  Plus,
   Filter,
   FileText,
   Eye
@@ -63,14 +48,13 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useStoreView } from "./store-context";
 import { format } from "date-fns";
+import supabase from "@/lib/supabase";
+import { toast } from "sonner";
 
 // Define the store data structure
 interface StoreData {
@@ -81,130 +65,398 @@ interface StoreData {
   is_active: boolean;
   latitude: number | null;
   longitude: number | null;
+  city_id: number | null;
   created_at: string;
   updated_at: string;
-  documents?: string[];
-  contractInfo?: string;
+  contract_file_url?: string;
+  contract_info?: string;
+}
+
+// Add city data structure
+interface CityData {
+  id: number;
+  city_name: string;
+  country: string;
 }
 
 interface StoreListProps {
   className?: string;
 }
 
-// Mock data for stores
-const mockStores: StoreData[] = [
-  {
-    store_id: 1,
-    store_name: "Store Shanghai",
-    address: "123 Nanjing Road, Shanghai, China",
-    contact_info: "contact@shanghai.store",
-    is_active: true,
-    latitude: 31.2304,
-    longitude: 121.4737,
-    created_at: "2023-01-15T08:30:00Z",
-    updated_at: "2023-05-20T14:45:00Z",
-    documents: ["Contract_2023.pdf"],
-    contractInfo: "5-year partnership agreement signed on January 15, 2023"
-  },
-  {
-    store_id: 2,
-    store_name: "Store Beijing",
-    address: "456 Wangfujing Street, Beijing, China",
-    contact_info: "contact@beijing.store",
-    is_active: true,
-    latitude: 39.9042,
-    longitude: 116.4074,
-    created_at: "2023-02-10T10:15:00Z",
-    updated_at: "2023-06-05T09:20:00Z",
-    documents: ["Beijing_Agreement_2023.docx"],
-    contractInfo: "3-year partnership with annual review"
-  },
-  {
-    store_id: 3,
-    store_name: "Store Guangzhou",
-    address: "789 Beijing Road, Guangzhou, China",
-    contact_info: "contact@guangzhou.store",
-    is_active: false,
-    latitude: 23.1291,
-    longitude: 113.2644,
-    created_at: "2023-03-22T11:45:00Z",
-    updated_at: "2023-04-18T16:30:00Z",
-    contractInfo: "Contract pending renewal, discussions ongoing"
-  },
-  {
-    store_id: 4,
-    store_name: "Store Shenzhen",
-    address: "321 Shennan Road, Shenzhen, China",
-    contact_info: "contact@shenzhen.store",
-    is_active: true,
-    latitude: 22.5431,
-    longitude: 114.0579,
-    created_at: "2023-04-05T09:00:00Z",
-    updated_at: "2023-07-12T13:10:00Z",
-    documents: ["Shenzhen_Contract.pdf", "Shenzhen_Amendment.pdf"],
-    contractInfo: "Long-term partnership with exclusive distribution rights"
-  },
-  {
-    store_id: 5,
-    store_name: "Store Chengdu",
-    address: "654 Chunxi Road, Chengdu, China",
-    contact_info: "contact@chengdu.store",
-    is_active: true,
-    latitude: 30.5728,
-    longitude: 104.0668,
-    created_at: "2023-05-18T14:30:00Z",
-    updated_at: "2023-08-03T11:25:00Z",
-    documents: ["Chengdu_Agreement.pdf"],
-    contractInfo: "2-year initial agreement with extension options"
-  },
-  {
-    store_id: 6,
-    store_name: "Store Hangzhou",
-    address: "987 West Lake Road, Hangzhou, China",
-    contact_info: "contact@hangzhou.store",
-    is_active: false,
-    latitude: 30.2741,
-    longitude: 120.1551,
-    created_at: "2023-06-22T09:15:00Z",
-    updated_at: "2023-09-08T14:20:00Z",
-    contractInfo: "Partnership currently on hold"
-  }
-];
-
 export function StoreList({ className }: StoreListProps) {
-  const { storeId, isAddStoreOpen, setIsAddStoreOpen, setStoreId } = useStoreView();
-  const [stores, setStores] = useState<StoreData[]>(mockStores);
-  const [isOpen, setIsOpen] = useState(false);
+  const [stores, setStores] = useState<StoreData[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
-  const [newStore, setNewStore] = useState<Partial<StoreData>>({
-    store_name: "",
-    address: "",
-    contact_info: "",
-    is_active: true,
-    contractInfo: "",
-    documents: []
-  });
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [storeToView, setStoreToView] = useState<StoreData | null>(null);
   
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
+
+  // Add new states
+  const [cities, setCities] = useState<CityData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [contractFile, setContractFile] = useState<File | null>(null);
+  const [contractFileToRemove, setContractFileToRemove] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   
-  // Extract unique cities from store addresses
-  const cities = React.useMemo(() => {
-    const citySet = new Set<string>();
-    stores.forEach(store => {
-      const cityMatch = store.address.match(/([^,]+), China/);
-      if (cityMatch && cityMatch[1]) {
-        citySet.add(cityMatch[1].trim());
+  // Get city list
+  useEffect(() => {
+    async function fetchCities() {
+      try {
+        const { data, error } = await supabase
+          .from('cities')
+          .select('*')
+          .order('city_name');
+          
+        if (error) throw error;
+        
+        if (data) {
+          setCities(data);
+        }
+      } catch (error) {
+        console.error('Error fetching cities:', error);
       }
-    });
-    return Array.from(citySet);
-  }, [stores]);
+    }
+    
+    fetchCities();
+  }, []);
   
-  // Filtered stores based on selected filters
+  // Get store list
+  useEffect(() => {
+    async function fetchStores() {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('stores')
+          .select(`
+            store_id,
+            store_name,
+            address,
+            contact_info,
+            is_active,
+            latitude,
+            longitude,
+            city_id,
+            created_at,
+            updated_at,
+            contract_info,
+            contract_file_url
+          `)
+          .order('created_at', { ascending: false });
+          
+        if (error) throw error;
+        
+        if (data) {
+          setStores(data);
+        }
+      } catch (error) {
+        console.error('Error fetching stores:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchStores();
+  }, []);
+
+  // Address processing function - extract city and set coordinates from address
+  const handleAddressChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const address = e.target.value;
+    
+    if (selectedStore) {
+      setSelectedStore({ ...selectedStore, address });
+    }
+    
+    // Extract city name from address
+    const cityMatch = address.match(/([^,]+), China/);
+    if (cityMatch && cityMatch[1]) {
+      const cityName = cityMatch[1].trim();
+      
+      // Find matching city
+      const matchedCity = cities.find(city => 
+        city.city_name.toLowerCase() === cityName.toLowerCase()
+      );
+      
+      if (matchedCity) {
+        // If city found, use its ID
+        const coordinates = getCityCoordinates(cityName);
+        
+        if (selectedStore) {
+          setSelectedStore({
+            ...selectedStore,
+            city_id: matchedCity.id,
+            latitude: coordinates.lat,
+            longitude: coordinates.lng
+          });
+        }
+      } else {
+        // If no matching city found, create new city
+        try {
+          const coordinates = getCityCoordinates(cityName);
+          
+          // First add the city to database
+          const { data: newCityData, error: cityError } = await supabase
+            .from('cities')
+            .insert({
+              city_name: cityName,
+              country: 'China'
+            })
+            .select();
+          
+          if (cityError) throw cityError;
+          
+          if (newCityData && newCityData.length > 0) {
+            // Add to local cities state
+            setCities([...cities, newCityData[0]]);
+            
+            // Update store data with new city
+            if (selectedStore) {
+              setSelectedStore({
+                ...selectedStore,
+                city_id: newCityData[0].id,
+                latitude: coordinates.lat,
+                longitude: coordinates.lng
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`Error creating new city "${cityName}":`, error);
+        }
+      }
+    }
+  };
+  
+  // Simple city coordinate mapping (in real app, use geocode API)
+  const getCityCoordinates = (cityName: string) => {
+    const coordinates: {[key: string]: {lat: number, lng: number}} = {
+      'Shanghai': {lat: 31.2304, lng: 121.4737},
+      'Beijing': {lat: 39.9042, lng: 116.4074},
+      'Guangzhou': {lat: 23.1291, lng: 113.2644},
+      'Shenzhen': {lat: 22.5431, lng: 114.0579},
+      'Chengdu': {lat: 30.5728, lng: 104.0668},
+      'Hangzhou': {lat: 30.2741, lng: 120.1551}
+    };
+    
+    // Case insensitive lookup
+    const normalizedCityName = cityName.toLowerCase();
+    for (const [key, value] of Object.entries(coordinates)) {
+      if (key.toLowerCase() === normalizedCityName) {
+        return value;
+      }
+    }
+    
+    // If not found, use default China center or calculate approximate coordinates
+    return {lat: 35.8617, lng: 104.1954}; 
+  };
+
+  // Contract file processing function
+  const handleContractFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setContractFile(e.target.files[0]);
+      setContractFileToRemove(false);
+    }
+  };
+  
+  // Handle file removal
+  const handleRemoveContractFile = () => {
+    setContractFile(null);
+    setContractFileToRemove(true);
+  };
+  
+  // Ensure the Supabase bucket exists
+  const ensureBucketExists = async (bucketName: string): Promise<boolean> => {
+    try {
+      // Check if bucket exists
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+      
+      if (!bucketExists) {
+        // Create the bucket if it doesn't exist
+        const { error } = await supabase.storage.createBucket(bucketName, {
+          public: true,
+          fileSizeLimit: 10485760, // 10MB
+        });
+        
+        if (error) {
+          console.error('Error creating bucket:', error);
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error ensuring bucket exists:', error);
+      return false;
+    }
+  };
+
+  // Upload contract file to Supabase storage
+  const uploadContractFile = async (file: File, storeId: number): Promise<string | null> => {
+    try {
+      // Ensure bucket exists
+      const bucketName = 'store_contracts';
+      const bucketExists = await ensureBucketExists(bucketName);
+      
+      if (!bucketExists) {
+        throw new Error('Failed to ensure bucket exists');
+      }
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${storeId}.${fileExt}`;
+      const filePath = `contracts/${fileName}`;
+      
+      const { error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file);
+      
+      if (error) throw error;
+      
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+        
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('Error uploading contract file:', error);
+      toast.error("Failed to upload file");
+      return null;
+    }
+  };
+
+  // Delete file from Supabase storage
+  const deleteContractFile = async (fileUrl: string): Promise<boolean> => {
+    try {
+      // Extract file path from URL
+      const bucketName = 'store_contracts';
+      const urlParts = fileUrl.split(`${bucketName}/`);
+      if (urlParts.length < 2) return false;
+      
+      const filePath = urlParts[1];
+      
+      const { error } = await supabase.storage
+        .from(bucketName)
+        .remove([filePath]);
+      
+      if (error) throw error;
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting contract file:', error);
+      toast.error("Failed to delete file");
+      return false;
+    }
+  };
+
+  // Save store information
+  const handleSaveStore = async () => {
+    // Validate required fields
+    if (!selectedStore?.store_name?.trim()) {
+      setValidationError("Store name is required");
+      toast.error("Store name is required");
+      return;
+    }
+    
+    if (!selectedStore?.address?.trim()) {
+      setValidationError("Address is required");
+      toast.error("Address is required");
+      return;
+    }
+    
+    // Clear validation error if we passed validation
+    setValidationError(null);
+    setIsLoading(true);
+    
+    try {
+      if (selectedStore) {
+        // Update existing store
+        let updatedStore = {...selectedStore};
+        
+        // Handle contract file deletion if marked for removal
+        if (contractFileToRemove && updatedStore.contract_file_url) {
+          const deleted = await deleteContractFile(updatedStore.contract_file_url);
+          if (deleted) {
+            updatedStore.contract_file_url = undefined;
+          }
+        }
+        
+        // If there's a new contract file to upload
+        if (contractFile) {
+          // Delete old file if exists
+          if (updatedStore.contract_file_url) {
+            await deleteContractFile(updatedStore.contract_file_url);
+          }
+          
+          // Upload new file
+          const fileUrl = await uploadContractFile(contractFile, updatedStore.store_id);
+          if (fileUrl) {
+            updatedStore.contract_file_url = fileUrl;
+          }
+        }
+        
+        const { error } = await supabase
+          .from('stores')
+          .update({
+            store_name: updatedStore.store_name,
+            address: updatedStore.address,
+            contact_info: updatedStore.contact_info,
+            is_active: updatedStore.is_active,
+            latitude: updatedStore.latitude,
+            longitude: updatedStore.longitude,
+            city_id: updatedStore.city_id,
+            contract_info: updatedStore.contract_info,
+            contract_file_url: updatedStore.contract_file_url,
+            updated_at: new Date().toISOString()
+          })
+          .eq('store_id', updatedStore.store_id);
+          
+        if (error) throw error;
+        
+        // Update local state
+        setStores(stores.map(store => 
+          store.store_id === updatedStore.store_id ? updatedStore : store
+        ));
+        
+        // Close the dialog
+        setIsEditMode(false);
+        toast.success("Store updated successfully");
+      }
+      
+      // Clear temporary state
+      setContractFile(null);
+      setContractFileToRemove(false);
+      
+    } catch (error) {
+      console.error('Error saving store:', error);
+      toast.error("Failed to save store");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Open Edit Store Dialog
+  const handleEditStore = (store: StoreData) => {
+    setContractFile(null);
+    setContractFileToRemove(false);
+    setSelectedStore(store);
+    setIsEditMode(true);
+  };
+
+  // View Store Details
+  const handleViewDetails = (store: StoreData) => {
+    setStoreToView(store);
+    setIsDetailsDialogOpen(true);
+  };
+
+  // Format date for display (YYYY-MM-DD)
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return format(date, "yyyy-MM-dd");
+  };
+
+  // Add filteredStores definition
   const filteredStores = React.useMemo(() => {
     const filtered = stores.filter(store => {
       // Filter by status
@@ -222,167 +474,102 @@ export function StoreList({ className }: StoreListProps) {
       return true;
     });
     
-    // Sort by creation date (newest first)
+    // Sort by creation date (latest first)
     return filtered.sort((a, b) => 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }, [stores, statusFilter, cityFilter]);
 
-  // React to storeId changes from context
-  React.useEffect(() => {
-    if (storeId !== null) {
-      const store = stores.find(s => s.store_id === storeId);
-      if (store) {
-        setSelectedStore(store);
-        setIsEditMode(true);
-        setIsOpen(true);
-      }
-    }
-  }, [storeId, stores]);
-  
-  // React to isAddStoreOpen prop change
-  React.useEffect(() => {
-    if (isAddStoreOpen) {
-      setIsOpen(true);
-      setIsEditMode(false);
-      setSelectedStore(null);
-      setNewStore({
-        store_name: "",
-        address: "",
-        contact_info: "",
-        is_active: true,
-        contractInfo: "",
-        documents: []
-      });
-      setIsAddStoreOpen(false);
-    }
-  }, [isAddStoreOpen, setIsAddStoreOpen]);
-
-  // When the Sheet is closed, clear the selected store in context
-  const handleSheetOpenChange = (open: boolean) => {
-    setIsOpen(open);
-    if (!open) {
-      setStoreId(null);
-    }
-  };
-
-  // Handlers for store form
+  // Add processing functions
   const handleStoreNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEditMode && selectedStore) {
+    if (selectedStore) {
       setSelectedStore({ ...selectedStore, store_name: e.target.value });
-    } else {
-      setNewStore({ ...newStore, store_name: e.target.value });
-    }
-  };
-
-  const handleAddressChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (isEditMode && selectedStore) {
-      setSelectedStore({ ...selectedStore, address: e.target.value });
-    } else {
-      setNewStore({ ...newStore, address: e.target.value });
     }
   };
 
   const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEditMode && selectedStore) {
+    if (selectedStore) {
       setSelectedStore({ ...selectedStore, contact_info: e.target.value });
-    } else {
-      setNewStore({ ...newStore, contact_info: e.target.value });
     }
   };
 
   const handleContractInfoChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (isEditMode && selectedStore) {
-      setSelectedStore({ ...selectedStore, contractInfo: e.target.value });
-    } else {
-      setNewStore({ ...newStore, contractInfo: e.target.value });
+    if (selectedStore) {
+      setSelectedStore({ ...selectedStore, contract_info: e.target.value });
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const fileNames = Array.from(e.target.files).map(file => file.name);
-      
-      if (isEditMode && selectedStore) {
-        setSelectedStore({ 
-          ...selectedStore, 
-          documents: [...(selectedStore.documents || []), ...fileNames] 
-        });
-      } else {
-        setNewStore({ 
-          ...newStore, 
-          documents: [...(newStore.documents || []), ...fileNames] 
-        });
-      }
-    }
-  };
-
-  // Open the form for adding a new store
-  const handleAddStore = () => {
-    setIsEditMode(false);
-    setSelectedStore(null);
-    setNewStore({
-      store_name: "",
-      address: "",
-      contact_info: "",
-      is_active: true,
-      contractInfo: "",
-      documents: []
-    });
-    setIsOpen(true);
-  };
-
-  // Open the form for editing an existing store
-  const handleEditStore = (store: StoreData) => {
-    setIsEditMode(true);
-    setSelectedStore(store);
-    setIsOpen(true);
-  };
-
-  // View store details
-  const handleViewDetails = (store: StoreData) => {
-    setStoreToView(store);
-    setIsDetailsDialogOpen(true);
-  };
-
-  // Save a new or edited store
-  const handleSaveStore = () => {
-    if (isEditMode && selectedStore) {
-      // Update existing store
-      const updatedStores = stores.map(store => 
-        store.store_id === selectedStore.store_id ? selectedStore : store
+  // Render file information
+  const renderFileInfo = (fileUrl?: string) => {
+    if (contractFile) {
+      return (
+        <Badge variant="outline" className="flex gap-1 items-center">
+          <FileText className="h-3 w-3" />
+          {contractFile.name}
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveContractFile();
+            }}
+          >
+            <XCircle className="h-3 w-3" />
+          </Button>
+        </Badge>
       );
-      setStores(updatedStores);
+    } else if (fileUrl) {
+      return (
+        <Badge variant="outline" className="flex gap-1 items-center">
+          <FileText className="h-3 w-3" />
+          {fileUrl.split('/').pop()}
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveContractFile();
+            }}
+          >
+            <XCircle className="h-3 w-3" />
+          </Button>
+        </Badge>
+      );
     } else {
-      // Add new store
-      const storeData: StoreData = {
-        store_id: Math.max(...stores.map(s => s.store_id)) + 1,
-        store_name: newStore.store_name || "",
-        address: newStore.address || "",
-        contact_info: newStore.contact_info || "",
-        is_active: newStore.is_active ?? true,
-        latitude: null,
-        longitude: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        contractInfo: newStore.contractInfo,
-        documents: newStore.documents
-      };
-      setStores([...stores, storeData]);
+      return <p className="text-sm text-muted-foreground">Click to choose file</p>;
     }
-    
-    // Close the form
-    setIsOpen(false);
   };
 
-  // Format date for display (YYYY-MM-DD)
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return format(date, "yyyy-MM-dd");
-  };
+  // Contract file component for edit
+  const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
+    <div className="space-y-2">
+      <Label htmlFor="contractFile">Contract File</Label>
+      <div className="border rounded-md p-2 relative">
+        <div className="flex flex-wrap gap-2">
+          {contractFile || fileUrl ? (
+            renderFileInfo(fileUrl)
+          ) : (
+            <p className="text-sm text-muted-foreground">Click to choose file</p>
+          )}
+        </div>
+        <Input 
+          id="contractFile" 
+          type="file" 
+          accept=".pdf,.doc,.docx,.txt"
+          onChange={handleContractFileChange}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
+      {/* Filters Card */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -419,8 +606,8 @@ export function StoreList({ className }: StoreListProps) {
                   <SelectContent className="justify-center">
                     <SelectItem value="all">All</SelectItem>
                     {cities.map(city => (
-                      <SelectItem key={city} value={city}>
-                        {city}
+                      <SelectItem key={city.id} value={city.city_name}>
+                        {city.city_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -433,7 +620,7 @@ export function StoreList({ className }: StoreListProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Store Name</TableHead>
+                <TableHead>Store</TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Created</TableHead>
@@ -477,13 +664,16 @@ export function StoreList({ className }: StoreListProps) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Dialog>
+                        <Dialog open={isEditMode} onOpenChange={(open) => {
+                          setIsEditMode(open);
+                          if (!open) setValidationError(null);
+                        }}>
                           <DialogTrigger asChild>
                             <Button variant="outline" size="icon" onClick={() => handleEditStore(store)}>
                               <Edit className="h-4 w-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="sm:max-w-md">
+                          <DialogContent className="sm:max-w-md bg-background">
                             <DialogHeader>
                               <DialogTitle>Edit Store</DialogTitle>
                               <DialogDescription>
@@ -496,25 +686,33 @@ export function StoreList({ className }: StoreListProps) {
                                 <Input 
                                   id="editStoreName" 
                                   placeholder="Enter store name" 
-                                  value={selectedStore?.store_name}
+                                  value={selectedStore?.store_name || ""}
                                   onChange={handleStoreNameChange}
+                                  className={validationError === "Store name is required" ? "border-destructive" : ""}
                                 />
+                                {validationError === "Store name is required" && (
+                                  <p className="text-sm text-destructive">Store name is required</p>
+                                )}
                               </div>
                               <div className="space-y-2">
                                 <Label htmlFor="editAddress">Address</Label>
                                 <Textarea 
                                   id="editAddress" 
                                   placeholder="Enter store address" 
-                                  value={selectedStore?.address}
+                                  value={selectedStore?.address || ""}
                                   onChange={handleAddressChange}
+                                  className={validationError === "Address is required" ? "border-destructive" : ""}
                                 />
+                                {validationError === "Address is required" && (
+                                  <p className="text-sm text-destructive">Address is required</p>
+                                )}
                               </div>
                               <div className="space-y-2">
                                 <Label htmlFor="editContactInfo">Contact Information</Label>
                                 <Input 
                                   id="editContactInfo" 
                                   placeholder="Enter contact information" 
-                                  value={selectedStore?.contact_info}
+                                  value={selectedStore?.contact_info || ""}
                                   onChange={handleContactInfoChange}
                                 />
                               </div>
@@ -522,53 +720,12 @@ export function StoreList({ className }: StoreListProps) {
                                 <Label htmlFor="editContractInfo">Contract Information</Label>
                                 <Textarea 
                                   id="editContractInfo" 
-                                  placeholder="Enter contract information" 
-                                  value={selectedStore?.contractInfo}
+                                  placeholder="Enter contract details" 
+                                  value={selectedStore?.contract_info || ""}
                                   onChange={handleContractInfoChange}
                                 />
                               </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editDocuments">Attachments</Label>
-                                <div className="border rounded-md p-2 relative">
-                                  <div className="flex flex-wrap gap-2">
-                                    {selectedStore?.documents?.length ? (
-                                      <>
-                                        {selectedStore.documents.map((doc, i) => (
-                                          <Badge key={i} variant="outline" className="flex gap-1 items-center">
-                                            <FileText className="h-3 w-3" />
-                                            {doc}
-                                            <Button 
-                                              type="button" 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
-                                              onClick={() => {
-                                                if(selectedStore) {
-                                                  setSelectedStore({
-                                                    ...selectedStore,
-                                                    documents: selectedStore.documents?.filter((_, index) => index !== i)
-                                                  });
-                                                }
-                                              }}
-                                            >
-                                              <XCircle className="h-3 w-3" />
-                                            </Button>
-                                          </Badge>
-                                        ))}
-                                      </>
-                                    ) : (
-                                      <p className="text-sm text-muted-foreground">Click to choose files</p>
-                                    )}
-                                  </div>
-                                  <Input 
-                                    id="editDocuments" 
-                                    type="file" 
-                                    multiple
-                                    onChange={handleFileChange}
-                                    className="absolute inset-0 opacity-0 cursor-pointer"
-                                  />
-                                </div>
-                              </div>
+                              <ContractFileComponent fileUrl={selectedStore?.contract_file_url} />
                               <div className="flex items-center justify-end gap-2 pt-2">
                                 <div className="flex items-center gap-2">
                                   <Switch 
@@ -590,8 +747,13 @@ export function StoreList({ className }: StoreListProps) {
                               </div>
                             </div>
                             <DialogFooter>
-                              <Button variant="outline" onClick={() => setIsEditMode(false)}>Cancel</Button>
-                              <Button onClick={handleSaveStore}>Save</Button>
+                              <Button variant="outline" onClick={() => {
+                                setIsEditMode(false);
+                                setValidationError(null);
+                              }}>Cancel</Button>
+                              <Button onClick={handleSaveStore} disabled={isLoading}>
+                                {isLoading ? "Saving..." : "Save"}
+                              </Button>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
@@ -608,160 +770,9 @@ export function StoreList({ className }: StoreListProps) {
         </CardContent>
       </Card>
 
-      {/* Sheet for Add/Edit Store */}
-      <Sheet open={isOpen} onOpenChange={handleSheetOpenChange}>
-        <SheetContent className="sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>{isEditMode ? "Edit Store" : "Add New Store"}</SheetTitle>
-            <SheetDescription>
-              {isEditMode 
-                ? "Update the details of the existing store." 
-                : "Add a new store location to your system."
-              }
-            </SheetDescription>
-          </SheetHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="storeName">Store Name</Label>
-              <Input 
-                id="storeName" 
-                placeholder="Enter store name" 
-                value={isEditMode ? selectedStore?.store_name : newStore.store_name}
-                onChange={handleStoreNameChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="address">Address</Label>
-              <Textarea 
-                id="address" 
-                placeholder="Enter store address" 
-                value={isEditMode ? selectedStore?.address : newStore.address}
-                onChange={handleAddressChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="contactInfo">Contact Information</Label>
-              <Input 
-                id="contactInfo" 
-                placeholder="Enter contact information" 
-                value={isEditMode ? selectedStore?.contact_info : newStore.contact_info}
-                onChange={handleContactInfoChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="contractInfo">Contract Information</Label>
-              <Textarea 
-                id="contractInfo" 
-                placeholder="Enter contract information" 
-                value={isEditMode ? selectedStore?.contractInfo : newStore.contractInfo}
-                onChange={handleContractInfoChange}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="activeStatus">Status</Label>
-                <div className="flex items-center gap-2">
-                  <Switch 
-                    id="activeStatus" 
-                    checked={isEditMode ? selectedStore?.is_active : newStore.is_active}
-                    onCheckedChange={(checked) => {
-                      if (isEditMode && selectedStore) {
-                        setSelectedStore({
-                          ...selectedStore,
-                          is_active: checked,
-                        });
-                      } else {
-                        setNewStore({
-                          ...newStore,
-                          is_active: checked,
-                        });
-                      }
-                    }}
-                  />
-                  <Label htmlFor="activeStatus" className="text-sm font-normal">
-                    {(isEditMode ? selectedStore?.is_active : newStore.is_active) ? "Active" : "Inactive"}
-                  </Label>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="documents">Attachments</Label>
-              <div className="border rounded-md p-2 relative">
-                <div className="flex flex-wrap gap-2">
-                  {((isEditMode && selectedStore?.documents?.length) || 
-                   (!isEditMode && newStore.documents?.length)) ? (
-                    <>
-                      {isEditMode && selectedStore?.documents ? 
-                        selectedStore.documents.map((doc, i) => (
-                          <Badge key={i} variant="outline" className="flex gap-1 items-center">
-                            <FileText className="h-3 w-3" />
-                            {doc}
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
-                              onClick={() => {
-                                if(selectedStore) {
-                                  setSelectedStore({
-                                    ...selectedStore,
-                                    documents: selectedStore.documents?.filter((_, index) => index !== i)
-                                  });
-                                }
-                              }}
-                            >
-                              <XCircle className="h-3 w-3" />
-                            </Button>
-                          </Badge>
-                        )) :
-                        newStore.documents?.map((doc, i) => (
-                          <Badge key={i} variant="outline" className="flex gap-1 items-center">
-                            <FileText className="h-3 w-3" />
-                            {doc}
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
-                              onClick={() => {
-                                setNewStore({
-                                  ...newStore,
-                                  documents: newStore.documents?.filter((_, index) => index !== i)
-                                });
-                              }}
-                            >
-                              <XCircle className="h-3 w-3" />
-                            </Button>
-                          </Badge>
-                        ))
-                      }
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Click to choose files</p>
-                  )}
-                </div>
-                <Input 
-                  id="documents" 
-                  type="file" 
-                  multiple
-                  onChange={handleFileChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-              </div>
-            </div>
-          </div>
-          <SheetFooter>
-            <SheetClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </SheetClose>
-            <Button onClick={handleSaveStore}>Save</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
       {/* Store Details Dialog */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-background">
           <DialogHeader>
             <DialogTitle>{storeToView?.store_name}</DialogTitle>
             <DialogDescription>
@@ -776,16 +787,21 @@ export function StoreList({ className }: StoreListProps) {
                 <p className="text-sm">{storeToView?.contact_info || "No contact information available"}</p>
               </div>
             </div>
-            {storeToView?.documents && storeToView.documents.length > 0 && (
+            {storeToView?.contract_file_url && (
               <div>
-                <h4 className="text-sm font-medium mb-1">Attachments</h4>
+                <h4 className="text-sm font-medium mb-1">Contract File</h4>
                 <div className="space-y-2">
-                  {storeToView.documents.map((doc, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{doc}</span>
-                    </div>
-                  ))}
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <a 
+                      href={storeToView.contract_file_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      {storeToView.contract_file_url.split('/').pop()}
+                    </a>
+                  </div>
                 </div>
               </div>
             )}
@@ -797,4 +813,4 @@ export function StoreList({ className }: StoreListProps) {
       </Dialog>
     </div>
   );
-} 
+}
