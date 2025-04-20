@@ -1,16 +1,9 @@
-import { Dispatch, SetStateAction } from 'react';
-
 declare module "../components/map-components" {
   export interface Store {
     id: string;
-    name: string;
+    store_name: string;
     address: string;
-    city: string;
-    state: string;
-    zip: string;
-    country: string;
-    phone: string;
-    email: string;
+    contact_info: string;
     latitude: number;
     longitude: number;
     isActive: boolean;

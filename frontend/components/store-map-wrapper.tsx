@@ -132,14 +132,9 @@ export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
   // Convert StoreLocation to Store for MapComponents
   const stores = validLocations.map(location => ({
     id: String(location.id),
-    name: location.store_name,
+    store_name: location.store_name,
     address: location.address,
-    city: "",
-    state: "",
-    zip: "",
-    country: "China",
-    phone: "",
-    email: location.contact_info,
+    contact_info: location.contact_info,
     latitude: location.latitude,
     longitude: location.longitude,
     isActive: location.is_active

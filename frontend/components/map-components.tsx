@@ -4,7 +4,7 @@ import * as React from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { MapPin, Phone, Edit, Building2 } from "lucide-react";
+import { MapPin, Phone, Building2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
   Tooltip, 
@@ -12,6 +12,8 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from "@/components/ui/tooltip";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { StoreDetailsDialog } from "@/components/store-details-dialog"; // 导入新组件
 
 // Fix the marker icon issue in Leaflet with Next.js
 function MapIconSetup() {
@@ -55,17 +57,14 @@ const createCustomIcon = (isActive: boolean) => {
 // Define the store data structure
 export interface Store {
   id: string;
-  name: string;
+  store_name: string;
   address: string;
-  city: string;
-  state: string;
-  zip: string;
-  country: string;
-  phone: string;
-  email: string;
+  contact_info: string;
   latitude: number;
   longitude: number;
   isActive: boolean;
+  contract_info?: string; // 添加字段
+  contract_file_url?: string; // 添加字段
 }
 
 export interface MapComponentsProps {
@@ -92,6 +91,16 @@ export function MapComponents({
   
   // Filter only active stores
   const activeStores = stores.filter(store => store.isActive);
+
+  // State for dialog
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = React.useState(false);
+  const [storeToView, setStoreToView] = React.useState<Store | null>(null);
+
+  // Handle view details
+  const handleViewDetails = (store: Store) => {
+    setStoreToView(store);
+    setIsDetailsDialogOpen(true);
+  };
   
   // Add custom styles
   React.useEffect(() => {
@@ -132,11 +141,12 @@ export function MapComponents({
       }
       
       .leaflet-popup-content-wrapper {
-        border-radius: 0.75rem;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
         border: none;
         overflow: hidden;
         padding: 0;
+        background: transparent;
       }
       
       .leaflet-popup-content {
@@ -145,7 +155,8 @@ export function MapComponents({
       }
       
       .leaflet-popup-tip {
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        background: #ffffff;
       }
       
       .store-popup .leaflet-popup-content-wrapper {
@@ -173,7 +184,6 @@ export function MapComponents({
         className="z-0 shadow-lg border border-gray-200"
         ref={mapRef}
       >
-        {/* Map style - improved cartography */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | <a href="https://carto.com/">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
@@ -191,39 +201,43 @@ export function MapComponents({
             }}
           >
             <Popup className="store-popup">
-              <div className="min-w-[280px]">
-                <div className="bg-gray-100 p-3 border-b border-gray-200">
-                  <h3 className="font-bold text-lg text-gray-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-gray-700" />
-                      {store.name}
-                    </div>
+              <Card className="min-w-[280px] border-none shadow-lg rounded-xl bg-white transition-all duration-300 hover:shadow-xl">
+                <CardHeader className="px-4">
+                  <CardTitle className="text-lg font-medium flex items-center gap-2 text-gray-900">
+                    <Building2 className="h-5 w-5 text-gray-500" />
+                    {store.store_name}
                     <Button 
-                      variant="outline" 
+                      variant="ghost" 
                       size="sm" 
-                      onClick={() => onSelectStore(store)}
-                      className="h-8 px-2"
+                      onClick={() => handleViewDetails(store)} // 修改为调用 handleViewDetails
+                      className="ml-auto hover:bg-gray-100 rounded-full"
                     >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
+                      <Eye className="h-5 w-5 text-gray-500" />
                     </Button>
-                  </h3>
-                </div>
-                <div className="space-y-3 p-4">
-                  <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-gray-600 shrink-0 mt-0.5" />
-                    <span className="text-sm">{store.address}</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pb-1 px-3 space-y-3"> 
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+                    <span className="text-sm text-gray-600 leading-relaxed">{store.address}</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-5 w-5 text-gray-600" />
-                    <span className="text-sm">{store.phone}</span>
+                  <div className="flex items-center gap-2">
+                    <Phone className="mx-1 h-4 w-4 text-gray-400" />
+                    <span className="text-sm text-gray-600 leading-relaxed">{store.contact_info}</span>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </Popup>
           </Marker>
         ))}
       </MapContainer>
+
+      {/* 添加 StoreDetailsDialog */}
+      <StoreDetailsDialog
+        store={storeToView}
+        open={isDetailsDialogOpen}
+        onOpenChange={setIsDetailsDialogOpen}
+      />
     </div>
   );
 }

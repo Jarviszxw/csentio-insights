@@ -187,7 +187,7 @@ export function ChartAreaInteractive() {
                     }}
                     formatter={(value, name, props) => {
                       if (name === "GMV") {
-                        return [`$${value.toLocaleString()}`, "GMV"];
+                        return [`¥${value.toLocaleString()}`, "GMV"];
                       }
                       if (name === "Sales") {
                         return [props.payload.sales.toLocaleString(), "Sales"];

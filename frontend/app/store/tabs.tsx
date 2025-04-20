@@ -61,7 +61,6 @@ export function StoreTabs() {
   });
   const [cities, setCities] = useState<CityData[]>([]);
   const [contractFile, setContractFile] = useState<File | null>(null);
-  const [contractFileToRemove, setContractFileToRemove] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -142,14 +141,12 @@ export function StoreTabs() {
   const handleContractFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setContractFile(e.target.files[0]);
-      setContractFileToRemove(false);
     }
   };
 
   // Handle file removal
   const handleRemoveContractFile = () => {
     setContractFile(null);
-    setContractFileToRemove(true);
   };
 
   // Ensure the Supabase bucket exists
@@ -268,7 +265,6 @@ export function StoreTabs() {
 
       setIsAddStoreDialogOpen(false);
       setContractFile(null);
-      setContractFileToRemove(false);
       setNewStore({
         store_name: "",
         address: "",
@@ -290,7 +286,6 @@ export function StoreTabs() {
   // Open Add Store Dialog
   const handleAddStore = () => {
     setContractFile(null);
-    setContractFileToRemove(false);
     setNewStore({
       store_name: "",
       address: "",
@@ -318,7 +313,7 @@ export function StoreTabs() {
         <Badge variant="outline" className="flex gap-1 items-center">
           <FileText className="h-3 w-3" />
           {contractFile.name}
-          <Button
+          {/* <Button
             type="button"
             variant="ghost"
             size="icon"
@@ -329,7 +324,7 @@ export function StoreTabs() {
             }}
           >
             <XCircle className="h-3 w-3" />
-          </Button>
+          </Button> */}
         </Badge>
       );
     } else {
@@ -346,7 +341,7 @@ export function StoreTabs() {
         <Input
           id="contractFile"
           type="file"
-          accept=".pdf,.doc,.docx,.txt"
+          accept=".pdf,.doc,.docx,.pages"
           onChange={handleContractFileChange}
           className="absolute inset-0 opacity-0 cursor-pointer"
         />
@@ -377,7 +372,7 @@ export function StoreTabs() {
             <Button
               variant="default"
               size="sm"
-              className="gap-1 bg-black text-white hover:bg-gray-800"
+              className="flex items-center gap-2"
               onClick={handleAddStore}
             >
               <Plus className="h-4 w-4" />

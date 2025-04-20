@@ -18,7 +18,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +54,7 @@ import {
 import { format } from "date-fns";
 import supabase from "@/lib/supabase";
 import { toast } from "sonner";
+import { StoreDetailsDialog } from "./store-details-dialog";
 
 // Define the store data structure
 interface StoreData {
@@ -467,7 +467,7 @@ export function StoreList({ className }: StoreListProps) {
       
       // Filter by city
       if (cityFilter !== "all") {
-        const cityMatch = store.address.includes(cityFilter);
+        const cityMatch = store.address && store.address.includes(cityFilter);
         if (!cityMatch) return false;
       }
       
@@ -664,101 +664,19 @@ export function StoreList({ className }: StoreListProps) {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Dialog open={isEditMode} onOpenChange={(open) => {
-                          setIsEditMode(open);
-                          if (!open) setValidationError(null);
-                        }}>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="icon" onClick={() => handleEditStore(store)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-md bg-background">
-                            <DialogHeader>
-                              <DialogTitle>Edit Store</DialogTitle>
-                              <DialogDescription>
-                                Update the details of the existing store.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="py-4 space-y-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="editStoreName">Store Name</Label>
-                                <Input 
-                                  id="editStoreName" 
-                                  placeholder="Enter store name" 
-                                  value={selectedStore?.store_name || ""}
-                                  onChange={handleStoreNameChange}
-                                  className={validationError === "Store name is required" ? "border-destructive" : ""}
-                                />
-                                {validationError === "Store name is required" && (
-                                  <p className="text-sm text-destructive">Store name is required</p>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editAddress">Address</Label>
-                                <Textarea 
-                                  id="editAddress" 
-                                  placeholder="Enter store address" 
-                                  value={selectedStore?.address || ""}
-                                  onChange={handleAddressChange}
-                                  className={validationError === "Address is required" ? "border-destructive" : ""}
-                                />
-                                {validationError === "Address is required" && (
-                                  <p className="text-sm text-destructive">Address is required</p>
-                                )}
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editContactInfo">Contact Information</Label>
-                                <Input 
-                                  id="editContactInfo" 
-                                  placeholder="Enter contact information" 
-                                  value={selectedStore?.contact_info || ""}
-                                  onChange={handleContactInfoChange}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="editContractInfo">Contract Information</Label>
-                                <Textarea 
-                                  id="editContractInfo" 
-                                  placeholder="Enter contract details" 
-                                  value={selectedStore?.contract_info || ""}
-                                  onChange={handleContractInfoChange}
-                                />
-                              </div>
-                              <ContractFileComponent fileUrl={selectedStore?.contract_file_url} />
-                              <div className="flex items-center justify-end gap-2 pt-2">
-                                <div className="flex items-center gap-2">
-                                  <Switch 
-                                    id="editActiveStatus" 
-                                    checked={selectedStore?.is_active}
-                                    onCheckedChange={(checked) => {
-                                      if (selectedStore) {
-                                        setSelectedStore({
-                                          ...selectedStore,
-                                          is_active: checked,
-                                        });
-                                      }
-                                    }}
-                                  />
-                                  <Label htmlFor="editActiveStatus" className="text-sm font-normal">
-                                    {selectedStore?.is_active ? "Active" : "Inactive"}
-                                  </Label>
-                                </div>
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => {
-                                setIsEditMode(false);
-                                setValidationError(null);
-                              }}>Cancel</Button>
-                              <Button onClick={handleSaveStore} disabled={isLoading}>
-                                {isLoading ? "Saving..." : "Save"}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
                         <Button variant="outline" size="icon" onClick={() => handleViewDetails(store)}>
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        {/* 移除 DialogTrigger，直接使用 Button */}
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          onClick={() => {
+                            handleEditStore(store);
+                            setIsEditMode(true); // 手动打开 Dialog
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -770,47 +688,102 @@ export function StoreList({ className }: StoreListProps) {
         </CardContent>
       </Card>
 
-      {/* Store Details Dialog */}
-      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent className="max-w-md bg-background">
+      {/* Dialog 保持在循环外部 */}
+      <Dialog open={isEditMode} onOpenChange={(open) => {
+        setIsEditMode(open);
+        if (!open) setValidationError(null);
+      }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{storeToView?.store_name}</DialogTitle>
+            <DialogTitle>Edit Store</DialogTitle>
             <DialogDescription>
-              Store Details
+              Update the details of the existing store.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-medium mb-1">Contact Information</h4>
-              <div className="flex items-center gap-1">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm">{storeToView?.contact_info || "No contact information available"}</p>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editStoreName">Store Name</Label>
+              <Input 
+                id="editStoreName" 
+                placeholder="Enter store name" 
+                value={selectedStore?.store_name || ""}
+                onChange={handleStoreNameChange}
+                className={validationError === "Store name is required" ? "border-destructive" : ""}
+              />
+              {validationError === "Store name is required" && (
+                <p className="text-sm text-destructive">Store name is required</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editAddress">Address</Label>
+              <Textarea 
+                id="editAddress" 
+                placeholder="Enter store address" 
+                value={selectedStore?.address || ""}
+                onChange={handleAddressChange}
+                className={validationError === "Address is required" ? "border-destructive" : ""}
+              />
+              {validationError === "Address is required" && (
+                <p className="text-sm text-destructive">Address is required</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editContactInfo">Contact Information</Label>
+              <Input 
+                id="editContactInfo" 
+                placeholder="Enter contact information" 
+                value={selectedStore?.contact_info || ""}
+                onChange={handleContactInfoChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editContractInfo">Contract Information</Label>
+              <Textarea 
+                id="editContractInfo" 
+                placeholder="Enter contract details" 
+                value={selectedStore?.contract_info || ""}
+                onChange={handleContractInfoChange}
+              />
+            </div>
+            <ContractFileComponent fileUrl={selectedStore?.contract_file_url} />
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="editActiveStatus" 
+                  checked={selectedStore?.is_active}
+                  onCheckedChange={(checked) => {
+                    if (selectedStore) {
+                      setSelectedStore({
+                        ...selectedStore,
+                        is_active: checked,
+                      });
+                    }
+                  }}
+                />
+                <Label htmlFor="editActiveStatus" className="text-sm font-normal">
+                  {selectedStore?.is_active ? "Active" : "Inactive"}
+                </Label>
               </div>
             </div>
-            {storeToView?.contract_file_url && (
-              <div>
-                <h4 className="text-sm font-medium mb-1">Contract File</h4>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <a 
-                      href={storeToView.contract_file_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline"
-                    >
-                      {storeToView.contract_file_url.split('/').pop()}
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
           <DialogFooter>
-            <Button onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => {
+              setIsEditMode(false);
+              setValidationError(null);
+            }}>Cancel</Button>
+            <Button onClick={handleSaveStore} disabled={isLoading}>
+              {isLoading ? "Saving..." : "Save"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Store Details Dialog */}
+      <StoreDetailsDialog
+        store={storeToView}
+        open={isDetailsDialogOpen}
+        onOpenChange={setIsDetailsDialogOpen}
+      />
     </div>
   );
 }
