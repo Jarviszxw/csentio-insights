@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StoreList } from "@/components/store-list";
 import { StoreMapWrapper } from "@/components/store-map-wrapper";
-import { MapIcon, ListIcon, Plus, FileText, XCircle } from "lucide-react";
+import { MapIcon, ListIcon, Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useStoreView } from "@/components/store-context";
 import {
@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import supabase from "@/lib/supabase";
 import { toast } from "sonner";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Define the store data structure
 interface StoreData {
@@ -55,6 +56,7 @@ export function StoreTabs() {
     contact_info: "",
     is_active: true,
     contract_info: "",
+    contract_file_url: "",
     city_id: null,
     latitude: null,
     longitude: null,
@@ -63,6 +65,12 @@ export function StoreTabs() {
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [newStoreAddressFields, setNewStoreAddressFields] = useState({
+    country: '',
+    city: '',
+    detailedAddress: '',
+    postalCode: '',
+  });
 
   // Fetch city list
   useEffect(() => {
@@ -87,54 +95,56 @@ export function StoreTabs() {
     fetchCities();
   }, []);
 
-  // Enhanced address processing function with geocoding
-  const handleAddressChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const address = e.target.value;
-    setNewStore({ ...newStore, address });
-
-    // Extract city name from address
-    const cityMatch = address.match(/([^,]+), China/);
-    if (cityMatch && cityMatch[1]) {
-      const cityName = cityMatch[1].trim();
-
-      // Find matching city
-      const matchedCity = cities.find(
-        (city) => city.city_name.toLowerCase() === cityName.toLowerCase()
+  // Geocoding function using Nominatim API
+  const geocodeAddress = async (address: string): Promise<{
+    latitude: number;
+    longitude: number;
+    cityName: string | null;
+    country: string | null;
+  } | null> => {
+    try {
+      const cleanedAddress = address.trim().replace(/\s+/g, ' ').replace(/,+/g, ',');
+      console.log('Geocoding address:', cleanedAddress);
+      
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanedAddress)}&format=json&addressdetails=1&limit=1&accept-language=zh`,
+        {
+          headers: {
+            'User-Agent': 'StoreMapApp (your-email@example.com)',
+          },
+        }
       );
-
-      if (matchedCity) {
-        const coordinates = getCityCoordinates(cityName);
-        setNewStore({
-          ...newStore,
-          city_id: matchedCity.id,
-          latitude: coordinates.lat,
-          longitude: coordinates.lng,
-        });
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
       }
-    }
-  };
+      
+      const data = await response.json();
+      console.log('Nominatim response:', data);
 
-  // Simple city coordinate mapping (in real app, use geocode API)
-  const getCityCoordinates = (cityName: string) => {
-    const coordinates: { [key: string]: { lat: number; lng: number } } = {
-      Shanghai: { lat: 31.2304, lng: 121.4737 },
-      Beijing: { lat: 39.9042, lng: 116.4074 },
-      Guangzhou: { lat: 23.1291, lng: 113.2644 },
-      Shenzhen: { lat: 22.5431, lng: 114.0579 },
-      Chengdu: { lat: 30.5728, lng: 104.0668 },
-      Hangzhou: { lat: 30.2741, lng: 120.1551 },
-    };
-
-    // Case insensitive lookup
-    const normalizedCityName = cityName.toLowerCase();
-    for (const [key, value] of Object.entries(coordinates)) {
-      if (key.toLowerCase() === normalizedCityName) {
-        return value;
+      if (data.length === 0) {
+        throw new Error("No results found for the address. Ensure the address is detailed and correctly formatted.");
       }
-    }
 
-    // If not found, use default China center
-    return { lat: 35.8617, lng: 104.1954 };
+      const result = data[0];
+      const latitude = parseFloat(result.lat);
+      const longitude = parseFloat(result.lon);
+      const cityName = result.address.city || result.address.town || result.address.village || null;
+      const country = result.address.country || null;
+
+      if (!latitude || !longitude) {
+        throw new Error("Invalid coordinates returned");
+      }
+
+      return {
+        latitude,
+        longitude,
+        cityName,
+        country,
+      };
+    } catch (error) {
+      console.error('Error geocoding address:', error);
+      throw error;
+    }
   };
 
   // Contract file processing function
@@ -142,11 +152,6 @@ export function StoreTabs() {
     if (e.target.files && e.target.files.length > 0) {
       setContractFile(e.target.files[0]);
     }
-  };
-
-  // Handle file removal
-  const handleRemoveContractFile = () => {
-    setContractFile(null);
   };
 
   // Ensure the Supabase bucket exists
@@ -177,7 +182,7 @@ export function StoreTabs() {
   // Upload contract file to Supabase storage
   const uploadContractFile = async (file: File, storeId: number): Promise<string | null> => {
     try {
-      const bucketName = "store_contracts";
+      const bucketName = "csentio-contracts";
       const bucketExists = await ensureBucketExists(bucketName);
 
       if (!bucketExists) {
@@ -224,9 +229,9 @@ export function StoreTabs() {
       return;
     }
 
-    if (!newStore?.address?.trim()) {
-      setValidationError("Address is required");
-      toast.error("Address is required");
+    if (!newStoreAddressFields.country?.trim() || !newStoreAddressFields.city?.trim()) {
+      setValidationError("Country and city are required");
+      toast.error("Country and city are required");
       return;
     }
 
@@ -234,6 +239,53 @@ export function StoreTabs() {
     setIsLoading(true);
 
     try {
+      // Combine address fields
+      const addressParts = [];
+      if (newStoreAddressFields.detailedAddress) addressParts.push(newStoreAddressFields.detailedAddress);
+      if (newStoreAddressFields.city) addressParts.push(newStoreAddressFields.city);
+      if (newStoreAddressFields.country) addressParts.push(newStoreAddressFields.country);
+      if (newStoreAddressFields.postalCode) addressParts.push(newStoreAddressFields.postalCode);
+      const fullAddress = addressParts.join(', ');
+
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      let cityId: number | null = null;
+
+      if (fullAddress.trim()) {
+        const geocodedData = await geocodeAddress(fullAddress);
+        if (geocodedData) {
+          latitude = geocodedData.latitude;
+          longitude = geocodedData.longitude;
+          const cityName = geocodedData.cityName;
+          const country = geocodedData.country;
+
+          if (cityName) {
+            const matchedCity = cities.find(city => 
+              city.city_name.toLowerCase() === cityName.toLowerCase()
+            );
+
+            if (matchedCity) {
+              cityId = matchedCity.id;
+            } else {
+              const { data: newCityData, error: cityError } = await supabase
+                .from('cities')
+                .insert({
+                  city_name: cityName,
+                  country: country || newStoreAddressFields.country || 'Unknown',
+                })
+                .select();
+
+              if (cityError) throw cityError;
+
+              if (newCityData && newCityData[0]) {
+                setCities([...cities, newCityData[0]]);
+                cityId = newCityData[0].id;
+              }
+            }
+          }
+        }
+      }
+
       let fileUrl = null;
       if (contractFile) {
         const tempId = Date.now();
@@ -244,12 +296,12 @@ export function StoreTabs() {
         .from("stores")
         .insert({
           store_name: newStore.store_name,
-          address: newStore.address,
+          address: fullAddress,
           contact_info: newStore.contact_info,
           is_active: true, // Default Active
-          latitude: newStore.latitude,
-          longitude: newStore.longitude,
-          city_id: newStore.city_id,
+          latitude,
+          longitude,
+          city_id: cityId,
           contract_info: newStore.contract_info,
           contract_file_url: fileUrl,
           created_at: new Date().toISOString(),
@@ -271,13 +323,20 @@ export function StoreTabs() {
         contact_info: "",
         is_active: true,
         contract_info: "",
+        contract_file_url: "",
         city_id: null,
         latitude: null,
         longitude: null,
       });
+      setNewStoreAddressFields({
+        country: '',
+        city: '',
+        detailedAddress: '',
+        postalCode: '',
+      });
     } catch (error) {
       console.error("Error saving store:", error);
-      toast.error("Failed to save store");
+      toast.error(error instanceof Error ? error.message : "Failed to save store. Check the address and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -292,9 +351,16 @@ export function StoreTabs() {
       contact_info: "",
       is_active: true,
       contract_info: "",
+      contract_file_url: "",
       city_id: null,
       latitude: null,
       longitude: null,
+    });
+    setNewStoreAddressFields({
+      country: '',
+      city: '',
+      detailedAddress: '',
+      postalCode: '',
     });
     setIsAddStoreDialogOpen(true);
     setValidationError(null);
@@ -313,18 +379,6 @@ export function StoreTabs() {
         <Badge variant="outline" className="flex gap-1 items-center">
           <FileText className="h-3 w-3" />
           {contractFile.name}
-          {/* <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRemoveContractFile();
-            }}
-          >
-            <XCircle className="h-3 w-3" />
-          </Button> */}
         </Badge>
       );
     } else {
@@ -398,17 +452,18 @@ export function StoreTabs() {
           if (!open) setValidationError(null);
         }}
       >
-        <DialogContent className="sm:max-w-md bg-background">
+        <DialogContent className="sm:max-w-md max-h-[80vh] rounded-md border overflow-hidden">
           <DialogHeader>
             <DialogTitle>Add New Store</DialogTitle>
             <DialogDescription>Enter the details for the new store location.</DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="newStoreName">Store Name</Label>
+          <ScrollArea className="max-h-[60vh] w-full">
+            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-4">
+              <div className="space-y-2">
+                <Label htmlFor="newStoreName">Store Name</Label>
               <Input
                 id="newStoreName"
-                placeholder="Enter store name"
+                placeholder="e.g., Store Name"
                 value={newStore.store_name || ""}
                 onChange={handleStoreNameChange}
                 className={validationError === "Store name is required" ? "border-destructive" : ""}
@@ -418,20 +473,56 @@ export function StoreTabs() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="newAddress">Address</Label>
-              <Textarea
-                id="newAddress"
-                placeholder="Enter store address (e.g. 123 Street, Shanghai, China)"
-                value={newStore.address || ""}
-                onChange={handleAddressChange}
-                className={validationError === "Address is required" ? "border-destructive" : ""}
-              />
+              <Label>Address</Label>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Label htmlFor="newCountry" className="text-sm font-normal mb-1 text-muted-foreground">Country</Label>
+                    <Input 
+                      id="newCountry" 
+                      placeholder="e.g., China"
+                      value={newStoreAddressFields.country}
+                      onChange={(e) => setNewStoreAddressFields({ ...newStoreAddressFields, country: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="newCity" className="text-sm font-normal mb-1 text-muted-foreground">City</Label>
+                    <Input 
+                      id="newCity" 
+                      placeholder="e.g., Shanghai"
+                      value={newStoreAddressFields.city}
+                      onChange={(e) => setNewStoreAddressFields({ ...newStoreAddressFields, city: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="newDetailedAddress" className="text-sm font-normal mb-1 text-muted-foreground">Detailed Address</Label>
+                  <Input 
+                    id="newDetailedAddress" 
+                    placeholder="e.g., 123 Nanjing East Road, Huangpu District"
+                    value={newStoreAddressFields.detailedAddress}
+                    onChange={(e) => setNewStoreAddressFields({ ...newStoreAddressFields, detailedAddress: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newPostalCode" className="text-sm font-normal mb-1 text-muted-foreground">Postal Code (Optional)</Label>
+                  <Input 
+                    id="newPostalCode" 
+                    placeholder="Enter postal code"
+                    value={newStoreAddressFields.postalCode}
+                    onChange={(e) => setNewStoreAddressFields({ ...newStoreAddressFields, postalCode: e.target.value })}
+                  />
+                </div>
+              </div>
               {validationError === "Address is required" && (
                 <p className="text-sm text-destructive">Address is required</p>
               )}
+              {validationError === "Country and city are required" && (
+                <p className="text-sm text-destructive">Country and city are required</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="newContactInfo">Contact Information</Label>
+              <Label htmlFor="newContactInfo">Contact Info</Label>
               <Input
                 id="newContactInfo"
                 placeholder="Enter contact information"
@@ -440,7 +531,7 @@ export function StoreTabs() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="newContractInfo">Contract Information</Label>
+              <Label htmlFor="newContractInfo">Contract Info</Label>
               <Textarea
                 id="newContractInfo"
                 placeholder="Enter contract details"
@@ -449,7 +540,8 @@ export function StoreTabs() {
               />
             </div>
             <ContractFileComponent />
-          </div>
+            </div>
+          </ScrollArea>
           <DialogFooter>
             <Button
               variant="outline"

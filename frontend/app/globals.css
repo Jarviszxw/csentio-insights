@@ -112,6 +112,7 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -119,4 +120,34 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@layer components {
+
+  .input:focus,
+  .input:focus-visible,
+  [role="textbox"]:focus,
+  [role="textbox"]:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    ring: none !important;
+    border-color: hsl(var(--input));
+  }
+  
+  input:focus,
+  input:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    ring: none !important;
+    border-color: inherit !important;
+  }
+
+  textarea:focus,
+  textarea:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    ring: none !important;
+    border-color: inherit !important;
+  }
+
 }

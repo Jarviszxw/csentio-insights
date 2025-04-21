@@ -32,6 +32,8 @@ interface StoreLocation {
   is_active: boolean;
   latitude: number;
   longitude: number;
+  contract_info: string;
+  contract_file_url: string;
 }
 
 // Calculate the center of all store locations
@@ -70,7 +72,9 @@ export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
             contact_info,
             is_active,
             latitude,
-            longitude
+            longitude,
+            contract_info,
+            contract_file_url
           `)
           .order('created_at', { ascending: false });
           
@@ -84,7 +88,9 @@ export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
             contact_info: store.contact_info,
             is_active: store.is_active,
             latitude: store.latitude,
-            longitude: store.longitude
+            longitude: store.longitude,
+            contract_info: store.contract_info,
+            contract_file_url: store.contract_file_url
           })));
         }
       } catch (error) {
@@ -137,7 +143,9 @@ export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
     contact_info: location.contact_info,
     latitude: location.latitude,
     longitude: location.longitude,
-    isActive: location.is_active
+    isActive: location.is_active,
+    contract_info: location.contract_info,
+    contract_file_url: location.contract_file_url
   }));
 
   // Handle a store selection from the map

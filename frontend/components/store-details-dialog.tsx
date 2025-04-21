@@ -31,7 +31,6 @@ export function StoreDetailsDialog({ store, open, onOpenChange }: StoreDetailsDi
       <DialogContent className="w-fit min-w-[300px] p-4">
         <DialogHeader className="relative">
           <DialogTitle>{store?.store_name}</DialogTitle>
-          <DialogDescription>Store Details</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

@@ -13,7 +13,11 @@ import {
   TooltipTrigger 
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { StoreDetailsDialog } from "@/components/store-details-dialog"; // 导入新组件
+import { StoreDetailsDialog } from "@/components/store-details-dialog";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import * as LMarkerCluster from "leaflet.markercluster";
+import "leaflet.markercluster";
 
 // Fix the marker icon issue in Leaflet with Next.js
 function MapIconSetup() {
@@ -54,6 +58,21 @@ const createCustomIcon = (isActive: boolean) => {
   });
 };
 
+// Custom cluster icon with count
+const createClusterIcon = (cluster: L.MarkerCluster) => {
+  const count = cluster.getChildCount();
+  return L.divIcon({
+    html: `
+      <div class="w-12 h-12 rounded-full flex items-center justify-center bg-gray-800 text-white shadow-xl text-lg font-bold">
+        ${count}
+      </div>
+    `,
+    className: 'custom-cluster-icon',
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
+  });
+};
+
 // Define the store data structure
 export interface Store {
   id: string;
@@ -63,8 +82,8 @@ export interface Store {
   latitude: number;
   longitude: number;
   isActive: boolean;
-  contract_info?: string; // 添加字段
-  contract_file_url?: string; // 添加字段
+  contract_info?: string;
+  contract_file_url?: string;
 }
 
 export interface MapComponentsProps {
@@ -162,6 +181,11 @@ export function MapComponents({
       .store-popup .leaflet-popup-content-wrapper {
         border: none;
       }
+      
+      .custom-cluster-icon {
+        background: transparent !important;
+        border: none !important;
+      }
     `;
     document.head.appendChild(style);
     
@@ -169,7 +193,97 @@ export function MapComponents({
       document.head.removeChild(style);
     };
   }, []);
-  
+
+  // Component to manage the marker cluster group
+  const MarkerClusterGroupComponent: React.FC = () => {
+    const map = useMap();
+
+    React.useEffect(() => {
+      // Create a MarkerClusterGroup
+      const markerClusterGroup = L.markerClusterGroup({
+        iconCreateFunction: createClusterIcon,
+        maxClusterRadius: 80, // Adjust this value to control clustering distance
+        spiderfyOnMaxZoom: true,
+        zoomToBoundsOnClick: true,
+        disableClusteringAtZoom: 15, // Stop clustering at this zoom level
+      });
+
+      // Add individual markers to the cluster group
+      activeStores.forEach((store) => {
+        const marker = L.marker([store.latitude, store.longitude], {
+          icon: createCustomIcon(store.isActive),
+        });
+
+        marker.bindPopup(
+          L.popup().setContent(
+            `
+            <div class="min-w-[280px] border-none shadow-lg rounded-xl bg-white transition-all duration-300 hover:shadow-xl">
+              <div class="px-3 pt-2 py-3">
+                <div class="text-lg font-medium flex items-center gap-2 text-gray-900">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500">
+                    <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/>
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                    <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/>
+                    <path d="M2 7h20"/>
+                  </svg>
+                  ${store.store_name}
+                  <button id="view-details-${store.id}" class="mr-auto hover:bg-gray-100 rounded-full p-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500">
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="pb-1 px-3 space-y-3">
+                <div class="flex items-start gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 shrink-0 mt-0.5">
+                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                  </svg>
+                  <span class="text-sm text-gray-600 leading-relaxed">${store.address}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-1 text-gray-400">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z"/>
+                  </svg>
+                  <span class="text-sm text-gray-600 leading-relaxed">${store.contact_info}</span>
+                </div>
+              </div>
+            </div>
+            `
+          )
+        );
+
+        marker.on('click', () => {
+          onSelectStore(store);
+        });
+
+        // Add event listener for the "View Details" button in the popup
+        marker.on('popupopen', () => {
+          const button = document.getElementById(`view-details-${store.id}`);
+          if (button) {
+            button.addEventListener('click', () => {
+              handleViewDetails(store);
+            });
+          }
+        });
+
+        markerClusterGroup.addLayer(marker);
+      });
+
+      // Add the cluster group to the map
+      map.addLayer(markerClusterGroup);
+
+      // Clean up on unmount
+      return () => {
+        map.removeLayer(markerClusterGroup);
+      };
+    }, [map, activeStores]);
+
+    return null;
+  };
+
   return (
     <div className="relative h-full w-full">
       {/* Initialize Leaflet icons */}
@@ -177,7 +291,7 @@ export function MapComponents({
       
       <MapContainer 
         center={[center[0], center[1]]} 
-        zoom={4} 
+        zoom={zoom} 
         scrollWheelZoom={true}
         style={{ height: "100%", width: "100%", borderRadius: "0.75rem" }}
         zoomControl={false}
@@ -189,50 +303,10 @@ export function MapComponents({
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
         
-        {activeStores.map((store) => (
-          <Marker 
-            key={store.id}
-            position={[store.latitude, store.longitude]}
-            icon={createCustomIcon(store.isActive)}
-            eventHandlers={{
-              click: () => {
-                onSelectStore(store);
-              },
-            }}
-          >
-            <Popup className="store-popup">
-              <Card className="min-w-[280px] border-none shadow-lg rounded-xl bg-white transition-all duration-300 hover:shadow-xl">
-                <CardHeader className="px-4">
-                  <CardTitle className="text-lg font-medium flex items-center gap-2 text-gray-900">
-                    <Building2 className="h-5 w-5 text-gray-500" />
-                    {store.store_name}
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleViewDetails(store)} // 修改为调用 handleViewDetails
-                      className="ml-auto hover:bg-gray-100 rounded-full"
-                    >
-                      <Eye className="h-5 w-5 text-gray-500" />
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pb-1 px-3 space-y-3"> 
-                  <div className="flex items-start gap-2">
-                    <MapPin className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
-                    <span className="text-sm text-gray-600 leading-relaxed">{store.address}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="mx-1 h-4 w-4 text-gray-400" />
-                    <span className="text-sm text-gray-600 leading-relaxed">{store.contact_info}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </Popup>
-          </Marker>
-        ))}
+        <MarkerClusterGroupComponent />
       </MapContainer>
 
-      {/* 添加 StoreDetailsDialog */}
+      {/* Store Details Dialog */}
       <StoreDetailsDialog
         store={storeToView}
         open={isDetailsDialogOpen}
