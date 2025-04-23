@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from routers import metrics, info
+from routers import metrics, info, inventory, settlement
 from supabase import Client
 from db.database import get_supabase
 import os
@@ -23,6 +23,8 @@ app.add_middleware(
 
 app.include_router(metrics.router)
 app.include_router(info.router)
+app.include_router(inventory.router)
+app.include_router(settlement.router)
 
 @app.get("/")
 async def root():

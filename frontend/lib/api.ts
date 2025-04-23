@@ -380,10 +380,14 @@ export async function testApiConnection(): Promise<boolean> {
   }
 }
 
+
+/**
+ * 获取所有店铺数据
+ * @returns 店铺数据数组
+ */
 export async function fetchStores(): Promise<StoresInfo[]> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
-
   const response = await fetch(`${API_BASE_URL}/info/stores`, {
     method: 'GET',
     headers: { 'Accept': 'application/json' },
@@ -400,376 +404,132 @@ export async function fetchStores(): Promise<StoresInfo[]> {
   return data;
 }
 
+// ... existing imports and code ...
 
-// --- Inventory Section ---
-
-// Interfaces for Inventory Section
-
-// Product Information (used in various responses and dialogs)
-export interface ProductInfo {
-  id: string; // Or number, depending on your DB schema
-  name: string; // skuName
-  code: string; // skuCode
-  // Add other relevant product details if needed
+export interface InventoryStats {
+  totalQuantity: number;
+  skuDetails: { id: number; name: string; quantity: number }[];
 }
 
-// Structure for SKU details within statistics
-interface SkuStatistic {
-  id: string | number; // Can be product ID or a unique identifier for the stat line
-  name: string; // skuName
+export interface InventoryStatisticsResponse {
+  sample: InventoryStats;
+  inventory: InventoryStats;
+}
+
+export interface DistributionItem {
+  name: string;
   quantity: number;
 }
 
-// Response for Inventory Statistics API
-export interface InventoryStatisticsResponse {
-  sample: {
-    totalQuantity: number;
-    skuDetails: SkuStatistic[];
-  };
-  inventory: {
-    totalQuantity: number;
-    skuDetails: SkuStatistic[];
-  };
-  error?: string;
-}
-
-// Response for Inventory Distribution (Bar Chart) API
-// Assuming it returns an array of products with their non-sample quantities
-export interface InventoryDistributionItem {
-    name: string; // skuCode or skuName, matching the chart's XAxis dataKey
-    quantity: number;
-}
-export type InventoryDistributionResponse = InventoryDistributionItem[];
-
-// Represents a single inventory record (matching table columns)
 export interface InventoryRecord {
-  id: string; // Or number
-  createTime: string; // ISO date string
-  inventory_date: string; // YYYY-MM-DD string
-  store: string; // Store name or ID, adjust based on backend response
-  storeId?: string; // Might be useful to have ID separate from name
+  id: string;
+  createTime: string;
+  store: string;
   skuName: string;
   skuCode: string;
-  productId?: string; // Might be useful to have ID separate from name/code
   quantity: number;
   trackingNo?: string;
   remarks?: string;
-  createdBy: string; // User name or ID
+  createdBy: string;
+  inventory_date: string;
 }
 
-// Response for fetching inventory records (includes pagination info)
-export interface PaginatedInventoryResponse {
-  records: InventoryRecord[];
-  totalRecords: number;
-  totalPages: number;
-  currentPage: number;
-  error?: string;
+export interface Product {
+  id: string;
+  name: string;
+  code: string;
 }
 
-// Data structure for creating a new inventory record via API
-export interface NewInventoryRecordData {
-  inventory_date: string; // YYYY-MM-DD
-  storeId: string; // ID of the store
-  productId: string; // ID of the product
-  quantity: number;
-  remarks?: string;
-  trackingNo?: string; // Optional based on your form/requirements
-  // createdBy will likely be handled by the backend based on authentication
-}
-
-// Data structure for updating an existing inventory record via API
-// Usually includes a subset of fields that are editable
-export interface UpdateInventoryRecordData {
-  inventory_date?: string; // YYYY-MM-DD
-  storeId?: string;
-  productId?: string;
-  quantity?: number;
-  remarks?: string;
-  trackingNo?: string;
-}
-
-
-// API Functions for Inventory Section
-
-/**
- * Fetches inventory statistics (total sample, total inventory, and SKU breakdowns).
- * @param storeId Optional store ID to filter statistics. Defaults to 'all'.
- */
-export async function fetchInventoryStatistics(storeId: string = 'all'): Promise<InventoryStatisticsResponse> {
+export async function fetchInventoryStatistics(storeId?: string): Promise<InventoryStatisticsResponse> {
   try {
-    console.log(`API: Fetching inventory statistics for store: ${storeId}`);
     const params = new URLSearchParams();
     if (storeId && storeId !== 'all') {
       params.append('store_id', storeId);
     }
-
     const url = `${API_BASE_URL}/inventory/statistics${params.toString() ? '?' + params.toString() : ''}`;
-    console.log("API: Request URL:", url);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
-      signal: controller.signal
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data: InventoryStatisticsResponse = await response.json();
-    console.log("API: Received inventory statistics:", data);
-    return data;
+    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+    return response.json();
   } catch (error) {
-    console.error('API: Failed to fetch inventory statistics:', error);
-    // Return a default error structure matching the expected response type
-    return {
-      sample: { totalQuantity: 0, skuDetails: [] },
-      inventory: { totalQuantity: 0, skuDetails: [] },
-      error: String(error)
-    };
+    console.error('Error fetching inventory statistics:', error);
+    return { sample: { totalQuantity: 0, skuDetails: [] }, inventory: { totalQuantity: 0, skuDetails: [] } };
   }
 }
 
-/**
- * Fetches inventory distribution data (e.g., for bar chart).
- * Excludes sample quantities by default based on user request.
- * @param storeId Optional store ID to filter distribution. Defaults to 'all'.
- */
-export async function fetchInventoryDistribution(storeId: string = 'all'): Promise<InventoryDistributionResponse> {
-   try {
-    console.log(`API: Fetching inventory distribution for store: ${storeId}`);
+export async function fetchInventoryDistribution(storeId?: string): Promise<DistributionItem[]> {
+  try {
     const params = new URLSearchParams();
     if (storeId && storeId !== 'all') {
       params.append('store_id', storeId);
     }
-    // Optional: Add param if backend needs explicit instruction to exclude samples
-    // params.append('exclude_samples', 'true');
-
     const url = `${API_BASE_URL}/inventory/distribution${params.toString() ? '?' + params.toString() : ''}`;
-    console.log("API: Request URL:", url);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
-      signal: controller.signal
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data: InventoryDistributionResponse = await response.json();
-    console.log("API: Received inventory distribution:", data);
-    return data;
+    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+    return response.json();
   } catch (error) {
-    console.error('API: Failed to fetch inventory distribution:', error);
-    // Return empty array on error
+    console.error('Error fetching inventory distribution:', error);
     return [];
   }
 }
 
-/**
- * Fetches paginated inventory records.
- * @param params Parameters including storeId, page, limit, sortBy, sortOrder.
- */
-export async function fetchInventoryRecords(params: {
-  storeId?: string;
-  page: number;
-  limit: number;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}): Promise<PaginatedInventoryResponse> {
+export async function fetchInventoryRecords(storeId?: string, startDate?: Date, endDate?: Date): Promise<InventoryRecord[]> {
   try {
-    const { storeId = 'all', page, limit, sortBy, sortOrder } = params;
-    console.log(`API: Fetching inventory records:`, params);
-
-    const queryParams = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-    });
-
+    const params = new URLSearchParams();
     if (storeId && storeId !== 'all') {
-      queryParams.append('store_id', storeId);
+      params.append('store_id', storeId);
     }
-    if (sortBy) {
-      queryParams.append('sort_by', sortBy);
+    if (startDate) {
+      params.append('start_date', formatDateToISOString(startDate));
     }
-    if (sortOrder) {
-      queryParams.append('sort_order', sortOrder);
+    if (endDate) {
+      params.append('end_date', formatDateToISOString(endDate));
     }
-
-    const url = `${API_BASE_URL}/inventory/records?${queryParams.toString()}`;
-    console.log("API: Request URL:", url);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // Slightly longer timeout for potentially larger data
-
+    const url = `${API_BASE_URL}/inventory/records${params.toString() ? '?' + params.toString() : ''}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
-      signal: controller.signal
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data: PaginatedInventoryResponse = await response.json();
-    console.log("API: Received inventory records:", data);
-    // Add basic validation if needed (e.g., check if records is an array)
-    return data;
-
+    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+    return response.json();
   } catch (error) {
-    console.error('API: Failed to fetch inventory records:', error);
-    return {
-      records: [],
-      totalRecords: 0,
-      totalPages: 0,
-      currentPage: params.page,
-      error: String(error)
-    };
+    console.error('Error fetching inventory records:', error);
+    return [];
   }
 }
 
-/**
- * Adds one or more new inventory records.
- * @param recordsData An array of new record data objects.
- */
-export async function addInventoryRecords(recordsData: NewInventoryRecordData[]): Promise<{ success: boolean; error?: string, createdIds?: string[] }> {
+export async function addInventoryRecords(records: Omit<InventoryRecord, 'id' | 'createTime'>[]): Promise<void> {
   try {
-    console.log(`API: Adding ${recordsData.length} new inventory record(s)`);
-    const url = `${API_BASE_URL}/inventory/records`;
-    console.log("API: Request URL:", url);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(url, {
+    const response = await fetch(`${API_BASE_URL}/inventory/records`, {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify(recordsData), // Send array directly
-      signal: controller.signal
+      body: JSON.stringify(records),
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-        // Attempt to parse error message from backend if available
-        let errorBody = 'Request failed';
-        try {
-            const errorData = await response.json();
-            errorBody = errorData.detail || errorData.message || JSON.stringify(errorData);
-        } catch (parseError) {
-            // Ignore if response body is not JSON or empty
-            errorBody = `API request failed with status ${response.status}`;
-        }
-      throw new Error(errorBody);
-    }
-
-    // Assuming backend returns { success: true, createdIds: [...] } on success
-    const result = await response.json();
-    console.log("API: Add inventory records successful:", result);
-    return { success: true, createdIds: result.createdIds };
-
+    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
   } catch (error) {
-    console.error('API: Failed to add inventory records:', error);
-    return { success: false, error: String(error) };
+    console.error('Error adding inventory records:', error);
+    throw error;
   }
 }
 
-/**
- * Updates an existing inventory record.
- * @param recordId The ID of the record to update.
- * @param recordData The data to update.
- */
-export async function updateInventoryRecord(recordId: string, recordData: UpdateInventoryRecordData): Promise<{ success: boolean; error?: string }> {
-   try {
-    console.log(`API: Updating inventory record ID: ${recordId}`);
-    const url = `${API_BASE_URL}/inventory/records/${recordId}`;
-    console.log("API: Request URL:", url);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(url, {
-      method: 'PUT', // Or PATCH depending on backend implementation
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(recordData),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-         let errorBody = 'Update failed';
-        try {
-            const errorData = await response.json();
-            errorBody = errorData.detail || errorData.message || JSON.stringify(errorData);
-        } catch (parseError) {
-            errorBody = `API request failed with status ${response.status}`;
-        }
-      throw new Error(errorBody);
-    }
-
-    // Assuming backend returns { success: true } or similar on success
-    await response.json(); // Consume response body if necessary
-    console.log("API: Update inventory record successful");
-    return { success: true };
-
-  } catch (error) {
-    console.error(`API: Failed to update inventory record ${recordId}:`, error);
-    return { success: false, error: String(error) };
-  }
-}
-
-
-/**
- * Fetches available products (SKUs) for selection.
- */
-export async function fetchProducts(): Promise<ProductInfo[]> {
+export async function fetchProducts(): Promise<Product[]> {
   try {
-    console.log("API: Fetching products");
-    const url = `${API_BASE_URL}/info/products`; // Assuming endpoint exists
-    console.log("API: Request URL:", url);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch(url, {
+    const response = await fetch(`${API_BASE_URL}/info/products`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
-      signal: controller.signal
     });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
-    }
-
-    const data: ProductInfo[] = await response.json();
-    console.log("API: Received products:", data);
-    return data;
+    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+    return response.json();
   } catch (error) {
-    console.error('API: Failed to fetch products:', error);
-    return []; // Return empty array on error
+    console.error('Error fetching products:', error);
+    return [];
   }
 }

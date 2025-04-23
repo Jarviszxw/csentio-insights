@@ -19,3 +19,4 @@ logger.info(f"Supabase Key configured: {'Yes' if SUPABASE_KEY else 'No'}")
 
 def get_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
+    

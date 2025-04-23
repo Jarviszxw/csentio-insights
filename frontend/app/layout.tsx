@@ -1,10 +1,11 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeScript } from "./theme-script";
-import { DateRangeProvider } from "@/components/date-range-context";
 import { Toaster } from "@/components/ui/sonner";
 import "leaflet/dist/leaflet.css";
+import { Providers } from "./providers"; // 导入 Providers 组件
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,16 +33,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <ThemeScript /> 
+        <ThemeScript />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <DateRangeProvider>{children}</DateRangeProvider>
-        <Toaster />
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );
 }
-
-

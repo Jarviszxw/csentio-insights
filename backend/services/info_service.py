@@ -1,5 +1,5 @@
 from supabase import Client
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 from datetime import date, timedelta
 import logging
 from fastapi import HTTPException
@@ -17,3 +17,20 @@ async def get_all_stores(supabase: Client) -> List[dict]:
         logger.error(f"Error fetching stores: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch stores")
         return []
+
+
+async def get_all_products(supabase: Client) -> List[Dict]:
+    try:
+        query = supabase.table("products").select("product_id, sku_name, sku_code").execute()
+        products = getattr(query, "data", [])
+        return [
+            {
+                "id": p["product_id"],
+                "name": p["sku_name"],
+                "code": p["sku_code"]
+            }
+            for p in products
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching products: {str(e)}")
+        raise

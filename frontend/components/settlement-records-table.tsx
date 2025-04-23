@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -15,9 +16,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, PenSquare } from "lucide-react";
+import { Plus, PenSquare, Eye, Calendar as CalendarIcon, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import {
   Pagination,
@@ -28,259 +30,406 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDateRange } from "./date-range-context";
 import { useSettlementView } from "./settlement-filter";
 import { Textarea } from "./ui/textarea";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { EditSettlementDialog, SettlementUpdatePayload } from "./edit-settlement-dialog";
 
 interface SettlementRecord {
   id: string;
-  create_time: string;
   settle_date: string;
   store: string;
-  sku_name: string;
-  sku_code: string;
-  quantity: number;
-  price: number;
+  store_id?: number;
+  total_amount?: number;
   remarks?: string;
   created_by: string;
+  items?: SettlementItemDB[];
 }
 
-// 模拟结算记录数据
-const mockRecords: SettlementRecord[] = [
-  {
-    id: "STL-001",
-    create_time: "2023-06-15T09:30:00Z",
-    settle_date: "2023-06-15",
-    store: "Store A",
-    sku_name: "Product Alpha",
-    sku_code: "SK-001",
-    quantity: 50,
-    price: 100.00,
-    remarks: "Monthly settlement",
-    created_by: "John Doe"
-  },
-  {
-    id: "STL-002",
-    create_time: "2023-06-16T14:20:00Z", 
-    settle_date: "2023-06-16",
-    store: "Store B",
-    sku_name: "Product Beta",
-    sku_code: "SK-002",
-    quantity: 30,
-    price: 120.00,
-    remarks: "Special promotion",
-    created_by: "Jane Smith"
-  },
-  {
-    id: "STL-003",
-    create_time: "2023-06-18T11:45:00Z",
-    settle_date: "2023-06-18",
-    store: "Store A", 
-    sku_name: "Product Gamma",
-    sku_code: "SK-003",
-    quantity: 20,
-    price: 80.00,
-    created_by: "Alice Johnson"
-  },
-  {
-    id: "STL-004",
-    create_time: "2023-06-20T16:10:00Z",
-    settle_date: "2023-06-20",
-    store: "Store C",
-    sku_name: "Product Delta",
-    sku_code: "SK-004", 
-    quantity: 15,
-    price: 150.00,
-    remarks: "End of season",
-    created_by: "Bob Wilson"
-  },
-  {
-    id: "STL-005",
-    create_time: "2023-06-22T10:00:00Z",
-    settle_date: "2023-06-22",
-    store: "Store B",
-    sku_name: "Product Alpha",
-    sku_code: "SK-001",
-    quantity: 25,
-    price: 100.00,
-    created_by: "Charlie Brown"
-  },
-  {
-    id: "STL-006",
-    create_time: "2023-06-25T08:30:00Z",
-    settle_date: "2023-06-25",
-    store: "Store A",
-    sku_name: "Product Beta",
-    sku_code: "SK-002",
-    quantity: 40,
-    price: 120.00,
-    remarks: "Weekly settlement",
-    created_by: "David Lee"
+interface SettlementItemForm {
+  product_id?: number;
+  quantity?: number;
+  unit_price?: number;
+}
+
+interface SettlementItemDB {
+  item_id: number;
+  settlement_id: number;
+  product_id: number;
+  quantity: number;
+  price: number;
+  products?: {
+    id: number;
+    name: string;
+    code: string;
   }
-];
+}
 
-// 模拟店铺数据
-const stores = [
-  { id: "store-a", name: "Store A" },
-  { id: "store-b", name: "Store B" },
-  { id: "store-c", name: "Store C" },
-];
+interface Product {
+  id: number;
+  name: string;
+  code: string;
+  price?: number;
+}
 
-// 模拟产品数据
-const products = [
-  { id: "prod-001", name: "Product Alpha", code: "SK-001", price: 100.00 },
-  { id: "prod-002", name: "Product Beta", code: "SK-002", price: 120.00 },
-  { id: "prod-003", name: "Product Gamma", code: "SK-003", price: 80.00 },
-  { id: "prod-004", name: "Product Delta", code: "SK-004", price: 150.00 },
-  { id: "prod-005", name: "Product Epsilon", code: "SK-005", price: 90.00 },
-  { id: "prod-006", name: "Product Zeta", code: "SK-006", price: 110.00 },
+interface SettlementResponse {
+  settlement_id: number;
+  settle_date: string;
+  store_id: number;
+  total_amount: number;
+  remarks: string;
+  created_by: string;
+  items: SettlementItemDB[];
+}
+
+interface SettlementUpdate {
+  settle_date: string;
+  store_id: number;
+  total_amount: number;
+  remarks: string;
+}
+
+const mockRecords: SettlementRecord[] = [
+  { id: "STL-001", settle_date: "2023-06-25", store: "Store A", store_id: 1, total_amount: 120.00, remarks: "Weekly settlement", created_by: "David Lee" },
+  { id: "STL-002", settle_date: "2023-06-22", store: "Store B", store_id: 2, total_amount: 100.00, remarks: "-", created_by: "Charlie Brown" },
+  { id: "STL-003", settle_date: "2023-06-20", store: "Store C", store_id: 3, total_amount: 150.00, remarks: "End of season", created_by: "Bob Wilson" },
+  { id: "STL-004", settle_date: "2023-06-18", store: "Store A", store_id: 1, total_amount: 80.00, remarks: "", created_by: "Alice Johnson" },
+  { id: "STL-005", settle_date: "2023-06-16", store: "Store B", store_id: 2, total_amount: 120.00, remarks: "Special promotion", created_by: "Jane Smith" }
 ];
 
 export function SettlementRecordsTable() {
   const { dateRange } = useDateRange();
-  const { viewMode, storeId } = useSettlementView();
+  const { viewMode, storeId, stores, loadingStores } = useSettlementView();
   const [records, setRecords] = React.useState<SettlementRecord[]>(mockRecords);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [selectedRecord, setSelectedRecord] = React.useState<SettlementRecord | null>(null);
-  const [newRecord, setNewRecord] = React.useState<Partial<SettlementRecord>>({
-    settle_date: new Date().toISOString().split('T')[0],
-    quantity: 1,
-    price: 0
+
+  const [products, setProducts] = React.useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = React.useState(true);
+  const [productsError, setProductsError] = React.useState<string | null>(null);
+
+  const [settlementItems, setSettlementItems] = React.useState<SettlementItemForm[]>([{ product_id: undefined, quantity: 1, unit_price: 0 }]);
+
+  const [newRecord, setNewRecord] = React.useState<Partial<SettlementRecord & { settle_date_obj?: Date }>>({
+    settle_date_obj: new Date(),
+    total_amount: 0,
+    store_id: undefined,
+    remarks: ''
   });
-  const [selectedProducts, setSelectedProducts] = React.useState<string[]>([]);
-  
+
+  const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
+
+  const [isAddingRecord, setIsAddingRecord] = React.useState(false);
+
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+  const [recordToEdit, setRecordToEdit] = React.useState<SettlementResponse | null>(null);
+  const [isEditingRecord, setIsEditingRecord] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  const [isFetchingItems, setIsFetchingItems] = React.useState(false);
+
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<SettlementItemDB[]>([]);
+  const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null);
+
   const itemsPerPage = 5;
   
-  // 根据视图模式和选择的商店过滤记录
   const filteredRecords = React.useMemo(() => {
     if (viewMode === "by-store" && storeId !== "all") {
-      const selectedStore = stores.find(store => store.id === storeId)?.name || "";
-      return records.filter(record => record.store === selectedStore);
+      const selectedStoreName = stores.find(s => String(s.store_id) === storeId)?.store_name;
+      if (selectedStoreName) {
+        return records.filter(record => record.store === selectedStoreName); 
+      }
+      return [];
     }
-    return records;
-  }, [records, viewMode, storeId]);
+    return records; 
+  }, [records, viewMode, storeId, stores]);
   
-  // 按create_time从新到旧排序
   const sortedRecords = React.useMemo(() => {
-    return [...filteredRecords].sort((a, b) => 
-      new Date(b.create_time).getTime() - new Date(a.create_time).getTime()
-    );
+    return [...filteredRecords].sort((a, b) => {
+      const dateA = a.settle_date ? new Date(a.settle_date).getTime() : 0;
+      const dateB = b.settle_date ? new Date(b.settle_date).getTime() : 0;
+      return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+    });
   }, [filteredRecords]);
   
-  // 计算总页数
   const totalPages = Math.ceil(sortedRecords.length / itemsPerPage);
   
-  // 获取当前页的记录
   const currentRecords = React.useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return sortedRecords.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedRecords, currentPage, itemsPerPage]);
   
-  // 页面变化处理函数
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
 
-  // 添加记录处理函数
-  const handleAddRecord = () => {
-    const id = `STL-${String(records.length + 1).padStart(3, '0')}`;
-    const newSettlementRecord: SettlementRecord = {
-      id,
-      create_time: new Date().toISOString(),
-      settle_date: newRecord.settle_date || new Date().toISOString().split('T')[0],
-      store: newRecord.store || 'Store A',
-      sku_name: newRecord.sku_name || 'Product Alpha',
-      sku_code: newRecord.sku_code || 'SK-001',
-      quantity: newRecord.quantity || 1,
-      price: newRecord.price || 0,
-      remarks: newRecord.remarks,
-      created_by: 'Current User'
+  const handleAddRecord = async () => {
+    const settleDateString = newRecord.settle_date_obj 
+        ? format(newRecord.settle_date_obj, 'yyyy-MM-dd') 
+        : new Date().toISOString().split('T')[0];
+
+    if (!newRecord.store_id || settlementItems.some(item => !item.product_id || !item.quantity)) {
+        console.error("Missing required fields: Store ID or Item details");
+        return;
+    }
+
+    const payload = {
+        settle_date: settleDateString,
+        store_id: newRecord.store_id,
+        total_amount: newRecord.total_amount ?? 0,
+        remarks: newRecord.remarks,
+        items: settlementItems.map(item => ({
+            product_id: item.product_id!,
+            quantity: item.quantity!,
+            unit_price: item.unit_price ?? 0 
+        }))
     };
     
-    setRecords([...records, newSettlementRecord]);
-    setIsAddDialogOpen(false);
-    setNewRecord({
-      settle_date: new Date().toISOString().split('T')[0],
-      quantity: 1,
-      price: 0
-    });
-  };
-  
-  // 编辑记录处理函数
-  const handleEditRecord = () => {
-    if (!selectedRecord) return;
+    console.log("Adding Record Payload:", JSON.stringify(payload, null, 2)); 
     
-    const updatedRecords = records.map(record => 
-      record.id === selectedRecord.id ? selectedRecord : record
-    );
-    
-    setRecords(updatedRecords);
-    setIsEditDialogOpen(false);
-    setSelectedRecord(null);
-  };
-  
-  // 删除记录处理函数
-  const handleDeleteRecord = (id: string) => {
-    setRecords(records.filter(record => record.id !== id));
-  };
-  
-  // 产品更改处理函数
-  const handleProductChange = (productName: string, isEdit: boolean = false) => {
-    const product = products.find(p => p.name === productName);
-    
-    if (product) {
-      if (isEdit && selectedRecord) {
-        setSelectedRecord({
-          ...selectedRecord,
-          sku_name: product.name,
-          sku_code: product.code,
-          price: product.price
+    try {
+        setIsAddingRecord(true);
+        const response = await fetch('http://localhost:8000/api/settlements/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
         });
-      } else {
+
+        if (!response.ok) {
+             const errorData = await response.json().catch(() => ({ detail: 'Unknown error structure' }));
+            throw new Error(`Failed to add settlement: ${response.status} - ${errorData.detail || response.statusText}`);
+        }
+
+        const createdData = await response.json();
+        console.log("API Response:", createdData);
+        setIsAddDialogOpen(false);
         setNewRecord({
-          ...newRecord,
-          sku_name: product.name,
-          sku_code: product.code,
-          price: product.price
+          settle_date_obj: new Date(), 
+          total_amount: 0,
+          store_id: undefined,
+          remarks: ''
         });
-      }
+        setSettlementItems([{ product_id: undefined, quantity: 1, unit_price: 0 }]);
+
+    } catch (error) {
+        console.error("Failed to submit settlement:", error);
+    } finally {
+        setIsAddingRecord(false);
     }
   };
   
-  // 处理多产品选择
-  const handleProductsChange = (productNames: string[]) => {
-    setSelectedProducts(productNames);
-    // 更新新记录中的产品信息，这里简化处理，实际可能需要更复杂的逻辑
-    if (productNames.length > 0) {
-      const firstProduct = products.find(p => p.name === productNames[0]);
-      if (firstProduct) {
-        setNewRecord({
-          ...newRecord,
-          sku_name: firstProduct.name,
-          sku_code: firstProduct.code,
-          price: firstProduct.price
-        });
-      }
-    }
-  };
-  
-  // 格式化日期
   const formatDate = (dateString: string) => {
-    return format(new Date(dateString), "yyyy-MM-dd HH:mm");
+    try {
+      return format(new Date(dateString), "yyyy-MM-dd"); 
+    } catch (error) {
+      return dateString; 
+    }
   };
   
-  // 格式化货币
   const formatCurrency = (amount: number) => {
     return `¥${amount.toFixed(2)}`;
   };
-  
+
+  React.useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoadingProducts(true);
+        setProductsError(null);
+        const response = await fetch('http://localhost:8000/api/info/products'); 
+        if (!response.ok) {
+          let errorMsg = 'Failed to fetch products';
+           try {
+             const errorData = await response.json();
+             errorMsg = `Failed to fetch products: ${response.status} ${response.statusText} - ${errorData.detail || JSON.stringify(errorData)}`;
+           } catch (jsonError) {
+             errorMsg = `Failed to fetch products: ${response.status} ${response.statusText}`;
+           }
+          throw new Error(errorMsg);
+        }
+        const data: Product[] = await response.json();
+        const sortedData = [...data].sort((a, b) => 
+          (a.name || '').localeCompare(b.name || '')
+        );
+        setProducts(sortedData);
+      } catch (err) {
+        console.error("Error fetching products:", err);
+        setProductsError(err instanceof Error ? err.message : 'An unknown error occurred');
+        setProducts([]);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  const handleAddItem = () => {
+    setSettlementItems([...settlementItems, { product_id: undefined, quantity: 1, unit_price: 0 }]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setSettlementItems(settlementItems.filter((_, i) => i !== index));
+  };
+
+  const handleItemChange = (index: number, field: keyof SettlementItemForm, value: any) => {
+    console.log(`handleItemChange: index=${index}, field=${field}, value=${value}`);
+    const updatedItems = [...settlementItems];
+    let numValue: number | undefined;
+
+    if (field === 'quantity') {
+      numValue = value ? Math.max(1, Number(value)) : undefined;
+    } else if (field === 'unit_price') {
+        numValue = value ? Math.max(0, Number(value)) : undefined;
+    } else if (field === 'product_id') {
+        numValue = value ? Number(value) : undefined;
+    } else {
+      return; 
+    }
+
+    updatedItems[index] = { ...updatedItems[index], [field]: numValue };
+
+    if (field === 'product_id' && numValue !== undefined) {
+      const selectedProduct = products.find(p => p.id === numValue);
+      console.log(`Selected product for ID ${numValue}:`, selectedProduct);
+      updatedItems[index].unit_price = selectedProduct?.price ?? 0;
+      console.log(`Set unit_price for index ${index} to: ${updatedItems[index].unit_price}`);
+    }
+
+    setSettlementItems(updatedItems);
+  };
+
+  React.useEffect(() => {
+    const calculatedTotal = settlementItems.reduce((sum, item) => {
+      const quantity = item.quantity || 0;
+      const price = item.unit_price || 0;
+      return sum + (quantity * price);
+    }, 0);
+    setNewRecord(prev => ({ ...prev, total_amount: calculatedTotal }));
+  }, [settlementItems]);
+
+  const handleViewItems = async (record: SettlementRecord) => {
+      console.log("Viewing items for record ID:", record.id);
+      setSelectedSettlementId(record.id); 
+      setIsFetchingItems(true);
+      setIsItemModalOpen(true);
+      setSelectedItems([]);
+
+      try {
+          const settlementIdNumber = parseInt(String(record.id).replace('STL-', ''));
+          if (isNaN(settlementIdNumber)) {
+              throw new Error("Invalid Settlement ID format");
+          }
+          const response = await fetch(`http://localhost:8000/api/settlements/${settlementIdNumber}`);
+          if (!response.ok) {
+              const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch items' }));
+              throw new Error(errorData.detail || `HTTP error ${response.status}`);
+          }
+          const data: SettlementResponse = await response.json();
+          const itemsToShow = data.items.map(item => ({ 
+              item_id: item.item_id,
+              settlement_id: item.settlement_id,
+              product_id: item.product_id,
+              quantity: item.quantity,
+              price: item.price,
+              products: item.products ? {
+                 id: item.products.id,
+                 name: item.products.name,
+                 code: item.products.code
+              } : undefined
+          }));
+          setSelectedItems(itemsToShow);
+      } catch (error) {
+          console.error("Failed to fetch settlement items:", error);
+          setSelectedItems([]);
+      } finally {
+          setIsFetchingItems(false);
+      }
+  };
+
+  const handleEditRecord = async (record: SettlementRecord) => {
+       console.log("Editing record ID:", record.id);
+       setRecordToEdit(null);
+       setEditError(null);
+       setIsEditingRecord(true);
+       setIsEditDialogOpen(true);
+
+       try {
+           const settlementIdNumber = parseInt(String(record.id).replace('STL-', ''));
+           if (isNaN(settlementIdNumber)) {
+               throw new Error("Invalid Settlement ID format for edit");
+           }
+           const response = await fetch(`http://localhost:8000/api/settlements/${settlementIdNumber}`);
+           if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch record for editing' }));
+                throw new Error(errorData.detail || `HTTP error ${response.status}`);
+           }
+           const data: SettlementResponse = await response.json();
+           setRecordToEdit(data);
+       } catch (error) {
+           console.error("Failed to fetch settlement for editing:", error);
+           setEditError(error instanceof Error ? error.message : "Unknown error fetching data");
+       } finally {
+           setIsEditingRecord(false);
+       }
+  };
+
+  const handleUpdateRecord = async (updatedData: SettlementUpdatePayload) => {
+        if (!recordToEdit) return;
+        console.log("Updating settlement ID:", recordToEdit.settlement_id);
+        setEditError(null);
+        setIsEditingRecord(true);
+
+        try {
+             const response = await fetch(`http://localhost:8000/api/settlements/${recordToEdit.settlement_id}`, {
+                 method: 'PUT',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(updatedData),
+             });
+             if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({ detail: 'Update failed' }));
+                  throw new Error(errorData.detail || `HTTP error ${response.status}`);
+             }
+             const savedRecord: SettlementResponse = await response.json();
+             console.log("Successfully updated:", savedRecord);
+             setRecords(prev => prev.map(r => 
+                 String(r.id).replace('STL-', '') === String(savedRecord.settlement_id) 
+                 ? {
+                      id: `STL-${savedRecord.settlement_id}`, 
+                      settle_date: savedRecord.settle_date.toString(), 
+                      store: stores.find(s => s.store_id === savedRecord.store_id)?.store_name || `Store ${savedRecord.store_id}`, 
+                      store_id: savedRecord.store_id,
+                      total_amount: savedRecord.total_amount,
+                      remarks: savedRecord.remarks || '-',
+                      created_by: String(savedRecord.created_by),
+                      items: savedRecord.items
+                 } : r
+             ));
+             setIsEditDialogOpen(false);
+        } catch (error) {
+             console.error("Failed to update settlement:", error);
+             setEditError(error instanceof Error ? error.message : "Unknown error during update");
+        } finally {
+             setIsEditingRecord(false);
+        }
+   };
+
   return (
+    
     <Card className="w-full">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-base">Settlement Records</CardTitle>
@@ -289,22 +438,15 @@ export function SettlementRecordsTable() {
             <Plus className="h-4 w-4" />
             Add
           </Button>
-          {/* <Button size="sm" variant="outline" className="gap-1">
-            <PenSquare className="h-4 w-4" />
-            Edit
-          </Button> */}
         </div>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Create Time</TableHead>
               <TableHead>Settle Date</TableHead>
               <TableHead>Store</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-right">Quantity</TableHead>
-              <TableHead>Price</TableHead>
+              <TableHead>Total Amount</TableHead>
               <TableHead>Remarks</TableHead>
               <TableHead>Created By</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -313,46 +455,34 @@ export function SettlementRecordsTable() {
           <TableBody>
             {currentRecords.map((record) => (
               <TableRow key={record.id}>
-                <TableCell>
-                  {formatDate(record.create_time)}
-                </TableCell>
-                <TableCell>
-                  {record.settle_date}
-                </TableCell>
+                <TableCell>{record.settle_date}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{record.store}</Badge>
                 </TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span>{record.sku_name}</span>
-                    <span className="text-xs text-muted-foreground">{record.sku_code}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {record.quantity}
-                </TableCell>
-                <TableCell>
-                  {formatCurrency(record.price)}
-                </TableCell>
-                <TableCell>
-                  {record.remarks || "-"}
-                </TableCell>
-                <TableCell>
-                  {record.created_by}
-                </TableCell>
+                <TableCell>{formatCurrency(record.total_amount || 0)}</TableCell>
+                <TableCell>{record.remarks || "-"}</TableCell>
+                <TableCell>{record.created_by}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end space-x-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setSelectedRecord(record);
-                        setIsEditDialogOpen(true);
-                      }}
-                    >
-                      <PenSquare className="h-4 w-4" />
-                      <span className="sr-only">Edit</span>
-                    </Button>
+                     <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleViewItems(record)}
+                        aria-label="View settlement items"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          console.log("Edit clicked for:", record.id);
+                          handleEditRecord(record);
+                        }}
+                        aria-label="Edit settlement record"
+                      >
+                        <PenSquare className="h-4 w-4" />
+                      </Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -369,10 +499,8 @@ export function SettlementRecordsTable() {
                     <PaginationPrevious onClick={() => handlePageChange(currentPage - 1)} />
                   </PaginationItem>
                 )}
-                
                 {[...Array(totalPages)].map((_, index) => {
                   const page = index + 1;
-                  // 最多显示5个页码，其他用省略号
                   if (
                     page === 1 ||
                     page === totalPages ||
@@ -400,7 +528,6 @@ export function SettlementRecordsTable() {
                   }
                   return null;
                 })}
-                
                 {currentPage < totalPages && (
                   <PaginationItem>
                     <PaginationNext onClick={() => handlePageChange(currentPage + 1)} />
@@ -412,207 +539,265 @@ export function SettlementRecordsTable() {
         )}
       </CardContent>
 
-      {/* Add Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
+        <DialogContent 
+          className="sm:max-w-[700px]" 
+          onInteractOutside={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.closest('.rdp')) { 
+                e.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(e) => {
+             const target = e.target as HTMLElement;
+             if (target.closest('.rdp')) { 
+                e.preventDefault();
+             }
+          }}
+         >
           <DialogHeader>
             <DialogTitle>New Settlement Record</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="settle_date">Date</Label>
-                <Input
-                  id="settle_date"
-                  type="date"
-                  value={newRecord.settle_date || ''}
-                  onChange={(e) => setNewRecord({...newRecord, settle_date: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="store">Store</Label>
-                <Select
-                  value={newRecord.store || ''}
-                  onValueChange={(value) => setNewRecord({...newRecord, store: value})}
-                >
-                  <SelectTrigger id="store">
-                    <SelectValue placeholder="Select store" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.map((store) => (
-                      <SelectItem key={store.id} value={store.name}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="products">Products (Multiple Selection)</Label>
-              <Select
-                value={newRecord.sku_name || ''}
-                onValueChange={(value) => handleProductChange(value)}
-              >
-                <SelectTrigger id="products">
-                  <SelectValue placeholder="Select products" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((product) => (
-                    <SelectItem key={product.id} value={product.name}>
-                      {product.name} ({product.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={newRecord.quantity || ''}
-                  onChange={(e) => setNewRecord({...newRecord, quantity: Number(e.target.value)})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="price">Price</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={newRecord.price || ''}
-                  onChange={(e) => setNewRecord({...newRecord, price: Number(e.target.value)})}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="remarks">Remarks</Label>
-              <Textarea
-                id="remarks"
-                value={newRecord.remarks || ''}
-                onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddRecord}>Add Record</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+             <div className="grid grid-cols-[200px_minmax(150px,_1fr)] gap-4 items-center">
+               <div className="space-y-2">
+                 <Label htmlFor="settle_date">Date</Label>
+                 <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen} modal={true}>
+                   <PopoverTrigger asChild>
+                     <Button
+                       variant={"outline"}
+                       className={cn(
+                         "w-[180px] justify-start text-left font-normal", 
+                         !newRecord.settle_date_obj && "text-muted-foreground"
+                       )}
+                       onClick={() => setIsDatePickerOpen(true)}
+                     >
+                       <CalendarIcon className="mr-2 h-4 w-4" />
+                       {newRecord.settle_date_obj ? (
+                         format(newRecord.settle_date_obj, "LLL d, y")
+                       ) : (
+                         <span>Pick a date</span>
+                       )}
+                     </Button>
+                   </PopoverTrigger>
+                   <PopoverContent className="w-auto p-0" align="start">
+                     <Calendar
+                       mode="single"
+                       selected={newRecord.settle_date_obj}
+                       onSelect={(date) => { 
+                         console.log("Calendar onSelect triggered. Date:", date);
+                         setNewRecord({...newRecord, settle_date_obj: date });
+                         setIsDatePickerOpen(false);
+                       }}
+                     />
+                   </PopoverContent>
+                 </Popover>
+               </div>
+               <div className="space-y-2">
+                 <Label htmlFor="store">Store</Label>
+                 <Select
+                   value={newRecord.store_id ? String(newRecord.store_id) : ''}
+                   onValueChange={(value) => setNewRecord({...newRecord, store_id: value ? Number(value) : undefined })}
+                   disabled={loadingStores}
+                 >
+                   <SelectTrigger id="store">
+                     <SelectValue placeholder={loadingStores ? "Loading stores..." : "Select store"} />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {stores.map((store) => (
+                       <SelectItem key={store.store_id} value={String(store.store_id)}>
+                         {store.store_name}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               </div>
+             </div>
 
-      {/* Edit Dialog */}
-      {selectedRecord && (
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent>
+             <div className="flex items-center gap-4 mt-4 mb-2">
+               <Label>Settlement Items</Label>
+               <Button variant="outline" size="sm" onClick={handleAddItem} disabled={loadingProducts}>
+                 <Plus className="h-4 w-4 mr-1" />
+                 Add
+               </Button>
+             </div>
+
+             <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2">
+               {settlementItems.map((item, index) => (
+                 <div key={index} className="flex items-center gap-2">
+                   <Select
+                     value={item.product_id ? String(item.product_id) : ''}
+                     onValueChange={(value) => handleItemChange(index, 'product_id', value)}
+                     disabled={loadingProducts}
+                   >
+                     <SelectTrigger className="flex-grow min-w-[150px] h-auto py-2 pl-3 pr-2 text-left min-h-12">
+                       <SelectValue placeholder={loadingProducts ? "Loading..." : "Select product"}>
+                         {item.product_id ? (
+                           (() => {
+                             const product = products.find(p => p.id === item.product_id);
+                             return product ? (
+                               <div className="flex flex-col items-start">
+                                 <span className="text-sm truncate">{product.name}</span>
+                                 <span className="text-xs text-muted-foreground text-left">{product.code}</span>
+                               </div>
+                             ) : 'Select product';
+                           })()
+                         ) : (
+                           loadingProducts ? "Loading..." : "Select product"
+                         )}
+                       </SelectValue>
+                     </SelectTrigger>
+                     <SelectContent>
+                       {productsError && <p className="text-red-500 text-xs p-2">{productsError}</p>}
+                       {products.map((product) => (
+                         <SelectItem key={product.id} value={String(product.id)}>
+                           <div>
+                             {product.name}
+                             <div className="text-xs text-muted-foreground">{product.code}</div>
+                           </div>
+                         </SelectItem>
+                       ))}
+                     </SelectContent>
+                   </Select>
+                   <div className="relative w-24">
+                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+                       ¥
+                     </span>
+                     <Input 
+                       id={`unit_price_${index}`}
+                       type="number"
+                       step="1"
+                       min="0"
+                       placeholder="Unit Price"
+                       value={item.unit_price ?? ''} 
+                       onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
+                       className="pl-7" 
+                     />
+                   </div>
+                   <Input 
+                     type="number"
+                     min="1"
+                     placeholder="Qty"
+                     value={item.quantity || ''}
+                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                     className="w-16 text-center"
+                   />
+                   <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-muted-foreground hover:text-destructive">
+                     <Trash2 className="h-4 w-4" />
+                     <span className="sr-only">Remove Item</span>
+                   </Button>
+                 </div>
+               ))}
+               {settlementItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">Click ' + Add ' to add settlement items.</p>
+               )}
+             </div>
+
+             <div className="space-y-2 mt-4">
+               <Label htmlFor="total_amount">Total Amount</Label> 
+               <div className="relative w-[120px]">
+                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+                   ¥
+                 </span>
+                 <Input
+                   id="total_amount"
+                   type="number"
+                   step="1"
+                   min="0"
+                   placeholder="0"
+                   className="pl-7 w-[120px]" 
+                   value={newRecord.total_amount ?? ''} 
+                   onChange={(e) => setNewRecord({...newRecord, total_amount: e.target.value ? Number(e.target.value) : undefined})}
+                 />
+               </div>
+             </div>
+
+             <div className="space-y-2 mt-4">
+               <Label htmlFor="remarks">Remarks</Label>
+               <Textarea
+                 id="remarks"
+                 placeholder="Optional remarks..."
+                 value={newRecord.remarks || ''}
+                 onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}
+               />
+             </div>
+           </div>
+           <DialogFooter>
+             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+             <Button 
+                onClick={handleAddRecord} 
+                disabled={isAddingRecord || loadingStores || loadingProducts || !newRecord.store_id || settlementItems.length === 0 || settlementItems.some(i => !i.product_id) || newRecord.total_amount === undefined}
+              >
+                {isAddingRecord ? "Adding..." : "Add Record"} 
+             </Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
+
+       <Dialog open={isItemModalOpen} onOpenChange={setIsItemModalOpen}>
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>Edit Settlement Record</DialogTitle>
+              <DialogTitle>Settlement Items Details</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_settle_date">Settlement Date</Label>
-                  <Input
-                    id="edit_settle_date"
-                    type="date"
-                    value={selectedRecord.settle_date || ''}
-                    onChange={(e) => setSelectedRecord({...selectedRecord, settle_date: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_store">Store</Label>
-                  <Select
-                    value={selectedRecord.store || ''}
-                    onValueChange={(value) => setSelectedRecord({...selectedRecord, store: value})}
-                  >
-                    <SelectTrigger id="edit_store">
-                      <SelectValue placeholder="Select store" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {stores.map((store) => (
-                        <SelectItem key={store.id} value={store.name}>
-                          {store.name}
-                        </SelectItem>
+            <div className="py-4">
+              {isFetchingItems ? (
+                 <div className="text-center p-4">Loading items...</div>
+              ) : selectedItems.length > 0 ? (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead className="text-right">Unit Price</TableHead>
+                        <TableHead className="text-right">Line Total</TableHead>
+                      </TableRow>
+                    </TableHeader> 
+                    <TableBody>
+                      {selectedItems.map((item) => (
+                        <TableRow key={item.item_id}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span>{item.products?.name || `Product ID: ${item.product_id}`}</span>
+                              <span className="text-xs text-muted-foreground">{item.products?.code || '-'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">{item.quantity}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(item.quantity * item.price)}</TableCell>
+                        </TableRow>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_product">Product</Label>
-                  <Select
-                    value={selectedRecord.sku_name || ''}
-                    onValueChange={(value) => handleProductChange(value, true)}
-                  >
-                    <SelectTrigger id="edit_product">
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.name}>
-                          {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_sku_code">SKU Code</Label>
-                  <Input
-                    id="edit_sku_code"
-                    value={selectedRecord.sku_code || ''}
-                    readOnly
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit_quantity">Quantity</Label>
-                  <Input
-                    id="edit_quantity"
-                    type="number"
-                    min="1"
-                    value={selectedRecord.quantity || ''}
-                    onChange={(e) => setSelectedRecord({...selectedRecord, quantity: Number(e.target.value)})}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit_price">Price</Label>
-                  <Input
-                    id="edit_price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={selectedRecord.price || ''}
-                    onChange={(e) => setSelectedRecord({...selectedRecord, price: Number(e.target.value)})}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit_remarks">Remarks</Label>
-                <Input
-                  id="edit_remarks"
-                  value={selectedRecord.remarks || ''}
-                  onChange={(e) => setSelectedRecord({...selectedRecord, remarks: e.target.value})}
-                />
-              </div>
+                    </TableBody>
+                  </Table>
+                  <div className="mt-4 pt-2 border-t flex justify-end items-center font-semibold">
+                    <span className="mr-4">Total:</span>
+                    <span>
+                      {formatCurrency(
+                        selectedItems.reduce((sum, item) => sum + item.quantity * item.price, 0)
+                      )}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-center text-muted-foreground">No items found for this settlement.</p>
+              )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleEditRecord}>Save Changes</Button>
+              <Button variant="outline" onClick={() => setIsItemModalOpen(false)}>Close</Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
-      )}
+       </Dialog>
+
+       <EditSettlementDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          settlementData={recordToEdit}
+          products={products}
+          stores={stores.map(s => ({ store_id: s.store_id, store_name: s.store_name }))}
+          loading={isEditingRecord}
+          error={editError}
+          onSave={handleUpdateRecord}
+       />
     </Card>
   );
-} 
+}
