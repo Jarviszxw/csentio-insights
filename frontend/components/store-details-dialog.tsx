@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { FileText } from "lucide-react";
+import { FileText, ClipboardList, Info } from "lucide-react";
 
 // Define the store data structure (shared between StoreList and MapComponents)
 interface StoreDetails {
@@ -36,7 +36,7 @@ export function StoreDetailsDialog({ store, open, onOpenChange }: StoreDetailsDi
           <div>
             <h4 className="text-sm font-medium mb-1">Contract Info</h4>
             <div className="flex items-center gap-1">
-              <FileText className="h-4 w-4 text-muted-foreground" />
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground px-[2px]">
                 {store?.contract_info || "No contract Info yet"}
               </p>
@@ -54,7 +54,7 @@ export function StoreDetailsDialog({ store, open, onOpenChange }: StoreDetailsDi
                     rel="noopener noreferrer"
                     className="text-sm text-blue-600 hover:underline"
                   >
-                    {store.contract_file_url.split('/').pop()}
+                    {extractDisplayFilename(store.contract_file_url)}
                   </a>
                 </div>
               </div>
@@ -67,4 +67,21 @@ export function StoreDetailsDialog({ store, open, onOpenChange }: StoreDetailsDi
       </DialogContent>
     </Dialog>
   );
+}
+
+// Helper function to extract display filename from contract file URL
+function extractDisplayFilename(fileUrl: string): string {
+  try {
+    const url = new URL(fileUrl);
+    const originalName = url.searchParams.get('originalName');
+    
+    if (originalName) {
+      return decodeURIComponent(originalName);
+    }
+  } catch (error) {
+    console.warn('Failed to parse file URL', error);
+  }
+  
+  // Fallback to extracting filename from path
+  return fileUrl.split('/').pop()?.split('?')[0] || 'File';
 }

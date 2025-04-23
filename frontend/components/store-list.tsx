@@ -56,6 +56,7 @@ import supabase from "@/lib/supabase";
 import { toast } from "sonner";
 import { StoreDetailsDialog } from "./store-details-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Define the store data structure
 interface StoreData {
@@ -82,9 +83,11 @@ interface CityData {
 
 interface StoreListProps {
   className?: string;
+  onStoreUpdated?: () => void;
+  refreshTrigger?: number;
 }
 
-export function StoreList({ className }: StoreListProps) {
+export function StoreList({ className, onStoreUpdated, refreshTrigger = 0 }: StoreListProps) {
   const [stores, setStores] = useState<StoreData[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedStore, setSelectedStore] = useState<StoreData | null>(null);
@@ -102,17 +105,10 @@ export function StoreList({ className }: StoreListProps) {
   const [contractFileToRemove, setContractFileToRemove] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Structured address fields (local state for UI only)
-  const [addressFields, setAddressFields] = useState({
-    country: '',
-    city: '',
-    detailedAddress: '',
-    postalCode: '',
-  });
-
-  // Get city list
-  useEffect(() => {
+  // Get city list whenever refreshTrigger changes
+  React.useEffect(() => {
     async function fetchCities() {
+      console.log('[fetchCities] Fetching city data...');
       try {
         const { data, error } = await supabase
           .from('cities')
@@ -122,6 +118,7 @@ export function StoreList({ className }: StoreListProps) {
         if (error) throw error;
 
         if (data) {
+          console.log('[fetchCities] City data received, count:', data.length);
           setCities(data);
         }
       } catch (error) {
@@ -130,11 +127,12 @@ export function StoreList({ className }: StoreListProps) {
     }
 
     fetchCities();
-  }, []);
+  }, [refreshTrigger]);
 
   // Get store list
   useEffect(() => {
     async function fetchStores() {
+      console.log('[fetchStores] Starting fetch...');
       setIsLoading(true);
       try {
         const { data, error } = await supabase
@@ -155,20 +153,29 @@ export function StoreList({ className }: StoreListProps) {
           `)
           .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+          console.error("fetchStores: Supabase error:", error);
+          throw error;
+        }
 
         if (data) {
+          console.log('[fetchStores] Data received, count:', data.length);
           setStores(data);
+        } else {
+          console.log('[fetchStores] No data received.');
+          // Don't set empty stores here to prevent flickering
         }
       } catch (error) {
         console.error('Error fetching stores:', error);
+        // Don't update stores on error to maintain current list
       } finally {
+        console.log('[fetchStores] Fetch finished, setting isLoading to false.');
         setIsLoading(false);
       }
     }
 
     fetchStores();
-  }, []);
+  }, [refreshTrigger]);
 
   // Geocoding function using Nominatim API
   const geocodeAddress = async (address: string): Promise<{
@@ -182,7 +189,7 @@ export function StoreList({ className }: StoreListProps) {
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&addressdetails=1&limit=1`,
         {
           headers: {
-            'User-Agent': 'StoreMapApp (your-email@example.com)',
+            'User-Agent': 'StoreMapApp (Jarviszxw1024@gmail.com)',
           },
         }
       );
@@ -215,94 +222,130 @@ export function StoreList({ className }: StoreListProps) {
   };
 
   // Geocode and update store during save
-  const geocodeAndUpdateStore = async (store: StoreData) => {
-    if (!store) return store;
-
-    const { detailedAddress, city, country, postalCode } = addressFields;
-    const addressParts = [];
-    if (detailedAddress) addressParts.push(detailedAddress);
-    if (city) addressParts.push(city);
-    if (country) addressParts.push(country);
-    if (postalCode) addressParts.push(postalCode);
-    const fullAddress = addressParts.join(', ');
-
-    let updatedStore = { ...store, address: fullAddress };
-
-    if (!fullAddress.trim()) {
+  const geocodeAndUpdateStore = async (store: StoreData): Promise<StoreData> => {
+    if (!store || !store.address?.trim()) {
       return {
-        ...updatedStore,
-        address: '',
+        ...store,
+        address: store?.address || '', // Preserve original or empty
         latitude: null,
         longitude: null,
         city_id: null,
       };
     }
 
-    const geocodedData = await geocodeAddress(fullAddress);
+    const fullAddress = store.address.trim();
+    let updatedStore = { ...store, address: fullAddress }; // Start with the provided address
 
-    if (!geocodedData) {
-      throw new Error("Unable to geocode address. Please check the address and try again.");
-    }
+    try {
+      const geocodedData = await geocodeAddress(fullAddress);
 
-    const { latitude, longitude, cityName, country: geocodedCountry } = geocodedData;
-
-    let cityId: number | null = null;
-    if (cityName) {
-      const matchedCity = cities.find(city =>
-        city.city_name.toLowerCase() === cityName.toLowerCase()
-      );
-
-      if (matchedCity) {
-        cityId = matchedCity.id;
-      } else {
-        try {
-          const { data: newCityData, error: cityError } = await supabase
-            .from('cities')
-            .insert({
-              city_name: cityName,
-              country: geocodedCountry || country || 'Unknown',
-            })
-            .select();
-
-          if (cityError) throw cityError;
-
-          if (newCityData && newCityData.length > 0) {
-            setCities([...cities, newCityData[0]]);
-            cityId = newCityData[0].id;
-          }
-        } catch (error) {
-          console.error(`Error creating new city "${cityName}":`, error);
-          throw new Error(`Failed to create new city: ${cityName}`);
-        }
+      if (!geocodedData) {
+        console.warn("Geocoding failed for address:", fullAddress);
+        // Return store with original address but nullified coords/city if geocoding fails
+        return {
+          ...updatedStore,
+          latitude: null,
+          longitude: null,
+          city_id: null,
+        };
       }
-    }
 
-    return {
-      ...updatedStore,
-      latitude,
-      longitude,
-      city_id: cityId,
-    };
+      const { latitude, longitude, cityName, country: geocodedCountry } = geocodedData;
+      let cityId: number | null = null;
+
+      // Extract city name from full address
+      const addressParts = fullAddress.split(',').map(part => part.trim());
+      // Use second or third part of the address as city if it exists
+      // Typically address format: "street, district, city, country"
+      const possibleCityName = addressParts.length > 2 ? addressParts[addressParts.length - 2] : 
+                              (addressParts.length > 1 ? addressParts[addressParts.length - 1] : null);
+
+      if (cityName || possibleCityName) {
+        // Prioritize cityName from geocoder, fallback to extracted city from address
+        const finalCityName = cityName || possibleCityName || '';
+        
+        // Try to find an EXACT match in the existing cities list
+        const matchedCity = cities.find(city =>
+          city.city_name.toLowerCase() === finalCityName.toLowerCase()
+        );
+
+        if (matchedCity) {
+          // Only set cityId if an exact match is found in our DB cities
+          cityId = matchedCity.id;
+          console.log(`[geocodeAndUpdateStore] Matched existing city: ${matchedCity.city_name} (ID: ${cityId})`);
+        } else {
+          // If no exact match, DO NOT create a new city. Log the discrepancy.
+          console.warn(`[geocodeAndUpdateStore] Geocoded city "${finalCityName}" not found in existing cities list. Not creating new city.`);
+          // Keep cityId as null. Add back original city_id if needed: cityId = store.city_id;
+        }
+      } else {
+        console.log('[geocodeAndUpdateStore] No city name returned by geocoder.');
+      }
+
+      // Return updated store with geocoded coords but potentially null cityId
+      return {
+        ...updatedStore,
+        latitude,
+        longitude,
+        city_id: cityId, // Use the found ID or null
+      };
+
+    } catch (error) {
+        console.error('Error during geocoding or city handling:', error);
+        toast.error(error instanceof Error ? error.message : "Geocoding failed");
+        // Return store with original address but nullified coords/city on error
+        return {
+          ...updatedStore,
+          latitude: null,
+          longitude: null,
+          city_id: null,
+        };
+    }
   };
 
-  // Initialize address fields when opening the edit dialog
+  // Modify handleEditStore
   const handleEditStore = (store: StoreData) => {
     setContractFile(null);
     setContractFileToRemove(false);
-    setSelectedStore(store);
-
-    const addressParts = store.address ? store.address.split(', ').map(part => part.trim()) : [];
-    setAddressFields({
-      country: addressParts.length > 2 ? addressParts[addressParts.length - 1] : '',
-      city: addressParts.length > 1 ? addressParts[addressParts.length - 2] : '',
-      detailedAddress: addressParts.length > 0 ? addressParts[0] : '',
-      postalCode: addressParts.length > 3 ? addressParts[addressParts.length - 3] : '',
-    });
-
+    // Create a fresh copy of the store to prevent reference issues
+    setSelectedStore(JSON.parse(JSON.stringify(store)));
+    setValidationError(null); // Clear previous errors
     setIsEditMode(true);
   };
 
-  // Contract file processing function
+  // Change to normal functions without useCallback to simplify
+  const handleStoreNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (selectedStore) {
+      const newStore = { ...selectedStore, store_name: value };
+      setSelectedStore(newStore);
+    }
+  };
+
+  const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (selectedStore) {
+      const newStore = { ...selectedStore, contact_info: value };
+      setSelectedStore(newStore);
+    }
+  };
+
+  const handleContractInfoChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (selectedStore) {
+      const newStore = { ...selectedStore, contract_info: value };
+      setSelectedStore(newStore);
+    }
+  };
+
+  const handleAddressTextAreaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (selectedStore) {
+      const newStore = { ...selectedStore, address: value };
+      setSelectedStore(newStore);
+    }
+  };
+
   const handleContractFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setContractFile(e.target.files[0]);
@@ -310,10 +353,17 @@ export function StoreList({ className }: StoreListProps) {
     }
   };
 
-  // Handle file removal
   const handleRemoveContractFile = () => {
     setContractFile(null);
     setContractFileToRemove(true);
+  };
+
+  // Handle active status change
+  const handleActiveStatusChange = (checked: boolean) => {
+    if (selectedStore) {
+      const newStore = { ...selectedStore, is_active: checked };
+      setSelectedStore(newStore);
+    }
   };
 
   // Sanitize file name for Supabase Storage
@@ -331,127 +381,122 @@ export function StoreList({ className }: StoreListProps) {
     return sanitized.replace(/^_+|_+$/g, '');
   };
 
-  // Ensure the Supabase bucket exists
-  const ensureBucketExists = async (bucketName: string): Promise<boolean> => {
+  // Add back uploadFileToBackend function definition
+  const uploadFileToBackend = async (file: File, storeId: number): Promise<string | null> => {
     try {
-      const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-      if (listError) {
-        console.error('Error listing buckets:', listError);
-        throw listError;
-      }
-      const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
-
-      if (!bucketExists) {
-        const { error } = await supabase.storage.createBucket(bucketName, {
-          public: true,
-          fileSizeLimit: 10485760, // 10MB
-        });
-
-        if (error) {
-          console.error('Error creating bucket:', error);
-          throw new Error(`Failed to create bucket: ${error.message}`);
-        }
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error ensuring bucket exists:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to ensure bucket exists');
-      return false;
-    }
-  };
-
-  // Upload contract file to Supabase storage
-  const uploadContractFile = async (file: File, storeId: number): Promise<string | null> => {
-    try {
-      const bucketName = 'csentio-contracts';
-      const bucketExists = await ensureBucketExists(bucketName);
-
-      if (!bucketExists) {
-        throw new Error('Failed to ensure bucket exists');
-      }
-
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
-      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-      const sanitizedBaseName = sanitizeFileName(baseName);
-      const fileName = `${Date.now()}-${storeId}-${sanitizedBaseName}.${fileExt}`;
-      const filePath = `contracts/${fileName}`;
-
-      console.log('Uploading file:', { fileName, fileSize: file.size, fileType: file.type });
-
-      if (file.size > 10 * 1024 * 1024) {
-        throw new Error('File size exceeds 10MB limit');
-      }
-
-      const allowedTypes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain',
-        'application/vnd.apple.pages',
-        'application/zip',
+      // Validate file type to avoid unsupported MIME type errors
+      const validFileTypes = [
+        'application/pdf', // PDF
+        'application/msword', // DOC
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+        'application/x-iwork-pages-sffpages', // Pages
+        'application/vnd.apple.pages', // Alternative MIME type for Pages
       ];
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error('Invalid file type. Allowed types: PDF, DOC, DOCX, TXT, PAGES');
+      
+      // Rather than strict MIME type validation, use file extension for validation
+      // as .pages files may have various MIME types depending on the system
+      const fileExt = file.name.split(".").pop()?.toLowerCase() || '';
+      
+      // Validate file extension matches allowed types
+      if (!['pdf', 'doc', 'docx', 'pages'].includes(fileExt)) {
+        throw new Error(`File extension ".${fileExt}" is not supported. Please use PDF, DOC, DOCX, or Pages files.`);
       }
-
-      const { error } = await supabase.storage
+      
+      // Use a predefined bucket name - this bucket should already exist in Supabase
+      const bucketName = "csentio-contracts";
+      
+      const sanitizedName = sanitizeFileName(file.name.split('.')[0]);
+      const originalName = file.name; // Store original name for display
+      const fileName = `contracts/${Date.now()}-${storeId}-${sanitizedName}.${fileExt}`;
+      
+      console.log(`Uploading file: ${fileName}, type: ${file.type}, size: ${Math.round(file.size/1024)}KB`);
+      
+      // For Pages files, default to a generic content type if needed
+      const contentType = 
+        fileExt === 'pages' && !validFileTypes.includes(file.type) 
+          ? 'application/octet-stream' 
+          : file.type;
+      
+      const { error: uploadError, data: uploadData } = await supabase.storage
         .from(bucketName)
-        .upload(filePath, file, {
-          upsert: false,
-          contentType: file.type,
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true, // Use upsert in case file exists
+          contentType: contentType, // Use the determined content type
+          duplex: 'half',
+          metadata: {
+            originalName: originalName, // Store original filename as metadata
+          }
         });
-
-      if (error) {
-        console.error('Supabase upload error:', error);
-        throw new Error(`Upload failed: ${error.message}`);
+      
+      if (uploadError) {
+        console.error('Error uploading file:', uploadError);
+        
+        // Special handling for common errors
+        if (uploadError.message.includes('bucket') || uploadError.message.includes('violates row-level security policy')) {
+          throw new Error(`Permission denied. Please ensure the bucket "${bucketName}" exists and has proper permissions.`);
+        }
+        
+        if (uploadError.message.includes('mime type') || uploadError.message.includes('not supported')) {
+          // For MIME type errors with .pages files, suggest setting bucket to allow all file types
+          if (fileExt === 'pages') {
+            throw new Error(`Pages files are not supported by default. Please configure your Supabase bucket to allow all file types.`);
+          } else {
+            throw new Error(`File type not supported. Please use PDF, DOC, DOCX, or Pages files only.`);
+          }
+        }
+        
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
-
-      const { data: urlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
-      if (!urlData.publicUrl) {
-        throw new Error('Failed to generate public URL for the file');
+      
+      // Get the public URL
+      const { data } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+      
+      if (!data?.publicUrl) {
+        throw new Error('Failed to get public URL');
       }
-
-      console.log('File uploaded successfully:', urlData.publicUrl);
-      return urlData.publicUrl;
+      
+      // Add original filename as a query parameter
+      const url = new URL(data.publicUrl);
+      url.searchParams.append('originalName', encodeURIComponent(originalName));
+      
+      return url.toString();
     } catch (error) {
-      console.error('Error uploading contract file:', error);
-      toast.error(error instanceof Error ? error.message : "Failed to upload file");
+      console.error('Error uploading file:', error);
+      toast.error(error instanceof Error ? error.message : 'File upload failed');
       return null;
     }
   };
 
-  // Delete file from Supabase storage
-  const deleteContractFile = async (fileUrl: string): Promise<boolean> => {
-    try {
-      const bucketName = 'csentio-contracts';
-      const url = new URL(fileUrl);
-      const pathSegments = url.pathname.split('/').filter(segment => segment);
-      const bucketIndex = pathSegments.indexOf(bucketName);
-      if (bucketIndex === -1 || bucketIndex === pathSegments.length - 1) {
-        console.error('Invalid contract file URL:', fileUrl);
-        return false;
+  // Add filteredStores definition
+  const filteredStores = React.useMemo(() => {
+    console.log('[filteredStores] Calculating - isLoading:', isLoading, 'stores count:', stores.length, 'statusFilter:', statusFilter, 'cityFilter:', cityFilter);
+    
+    // Always return current stores while loading to prevent emptying the list
+    const storeList = stores;
+    
+    if (storeList.length === 0) return [];
+    
+    const filtered = storeList.filter(store => {
+      if (statusFilter !== "all") {
+        const isActive = statusFilter === "active";
+        if (store.is_active !== isActive) return false;
       }
-      const filePath = pathSegments.slice(bucketIndex + 1).join('/');
 
-      const { error } = await supabase.storage
-        .from(bucketName)
-        .remove([filePath]);
-
-      if (error) throw error;
+      if (cityFilter !== "all") {
+        const cityMatch = store.address && store.address.includes(cityFilter);
+        if (!cityMatch) return false;
+      }
 
       return true;
-    } catch (error) {
-      console.error('Error deleting contract file:', error);
-      toast.error("Failed to delete file");
-      return false;
-    }
-  };
-
-  // Save store information
+    });
+    console.log('[filteredStores] Calculation done, filtered count:', filtered.length);
+    return filtered.sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [stores, statusFilter, cityFilter, isLoading]);
+  
+  // Modify handleSaveStore to avoid list emptying while saving
   const handleSaveStore = async () => {
     if (!selectedStore?.store_name?.trim()) {
       setValidationError("Store name is required");
@@ -465,38 +510,36 @@ export function StoreList({ className }: StoreListProps) {
       return;
     }
 
-    if (!addressFields.country?.trim() || !addressFields.city?.trim()) {
-      setValidationError("Country and city are required");
-      toast.error("Country and city are required");
-      return;
-    }
-
     setValidationError(null);
+    
+    // Show loading state for the save button
     setIsLoading(true);
 
-    try {
+    try { // Outer try for the whole process
       if (selectedStore) {
         let updatedStore = await geocodeAndUpdateStore(selectedStore);
+        let finalFileUrl: string | null | undefined = updatedStore.contract_file_url;
 
+        // --- Handle File Deletion Request (Flag only) ---
         if (contractFileToRemove && updatedStore.contract_file_url) {
-          const deleted = await deleteContractFile(updatedStore.contract_file_url);
-          if (deleted) {
-            updatedStore.contract_file_url = undefined;
-          }
+          finalFileUrl = undefined; // Mark for removal
         }
 
+        // --- Handle File Upload via Backend ---
         if (contractFile) {
-          if (updatedStore.contract_file_url) {
-            await deleteContractFile(updatedStore.contract_file_url);
-          }
-
-          const fileUrl = await uploadContractFile(contractFile, updatedStore.store_id);
-          if (fileUrl) {
-            updatedStore.contract_file_url = fileUrl;
+          const uploadedUrl = await uploadFileToBackend(contractFile, updatedStore.store_id);
+          if (uploadedUrl) {
+            finalFileUrl = uploadedUrl;
+          } else {
+            // Upload failed - error already shown by uploadFileToBackend.
+            // Important: Stop execution BUT ensure loading state is reset.
+            throw new Error("File upload failed via backend."); // Throw to be caught by outer catch
           }
         }
 
-        const { error } = await supabase
+        // --- Update Store Record ---
+        console.log(`[handleSaveStore] Updating DB. Final URL: ${finalFileUrl === undefined ? 'undefined (removing)' : finalFileUrl ?? 'null'}`);
+        const { error: updateError } = await supabase
           .from('stores')
           .update({
             store_name: updatedStore.store_name,
@@ -507,28 +550,47 @@ export function StoreList({ className }: StoreListProps) {
             longitude: updatedStore.longitude,
             city_id: updatedStore.city_id,
             contract_info: updatedStore.contract_info,
-            contract_file_url: updatedStore.contract_file_url,
+            contract_file_url: finalFileUrl,
             updated_at: new Date().toISOString(),
           })
           .eq('store_id', updatedStore.store_id);
 
-        if (error) throw error;
+        if (updateError) {
+          console.error('Error updating store record:', updateError);
+          throw updateError; // Throw to be caught by outer catch
+        }
 
-        setStores(stores.map(store =>
-          store.store_id === updatedStore.store_id ? updatedStore : store
-        ));
-
+        // --- Success --- 
+        // Update local state immediately to avoid waiting for refetch
+        const finalStoreState: StoreData = {
+          ...updatedStore, 
+          contract_file_url: finalFileUrl ?? undefined // Coalesce null/undefined to undefined
+        };
+        
+        // Update the store in the current list for immediate UI update
+        setStores(prevStores => 
+          prevStores.map(store =>
+            store.store_id === finalStoreState.store_id ? finalStoreState : store
+          )
+        );
+        
         setIsEditMode(false);
         toast.success("Store updated successfully");
+        if (onStoreUpdated) {
+          onStoreUpdated();
+        }
       }
-
       setContractFile(null);
       setContractFileToRemove(false);
 
     } catch (error) {
+      // Catch errors from geocoding, backend upload, or DB update
       console.error('Error saving store:', error);
       toast.error(error instanceof Error ? error.message : "Failed to save store");
+      // Do not reset contractFile/contractFileToRemove here on error, user might want to retry
     } finally {
+      // **Crucially, ensure isLoading is always reset**
+      console.log('[handleSaveStore] Resetting loading state in finally block.');
       setIsLoading(false);
     }
   };
@@ -547,127 +609,76 @@ export function StoreList({ className }: StoreListProps) {
     return format(date, "MMM d, yyyy");
   };
 
-  // Add filteredStores definition
-  const filteredStores = React.useMemo(() => {
-    const filtered = stores.filter(store => {
-      if (statusFilter !== "all") {
-        const isActive = statusFilter === "active";
-        if (store.is_active !== isActive) return false;
+  // Restore Render file information function
+  const renderFileInfo = (fileUrl?: string) => {
+    // Existing logic to display badge with filename and remove button
+    if (contractFile) {
+      return (
+        <Badge variant="outline" className="flex gap-1 items-center">
+          <FileText className="h-3 w-3" />
+          {contractFile.name}
+        </Badge>
+      );
+    } else if (fileUrl) {
+      // Extract original filename from URL if available
+      try {
+        const url = new URL(fileUrl);
+        const originalName = url.searchParams.get('originalName');
+        
+        if (originalName) {
+          return (
+            <Badge variant="outline" className="flex gap-1 items-center">
+              <FileText className="h-3 w-3" />
+              {decodeURIComponent(originalName)}
+            </Badge>
+          );
+        }
+      } catch (error) {
+        // If URL parsing fails, fallback to the old method
+        console.warn('Failed to parse file URL', error);
       }
-
-      if (cityFilter !== "all") {
-        const cityMatch = store.address && store.address.includes(cityFilter);
-        if (!cityMatch) return false;
-      }
-
-      return true;
-    });
-
-    return filtered.sort((a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-  }, [stores, statusFilter, cityFilter]);
-
-  // Add processing functions
-  const handleStoreNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (selectedStore) {
-      setSelectedStore({ ...selectedStore, store_name: e.target.value });
+      
+      // Fallback to extracting filename from path
+      const filename = fileUrl.split('/').pop()?.split('?')[0];
+      return (
+        <Badge variant="outline" className="flex gap-1 items-center">
+          <FileText className="h-3 w-3" />
+          {filename || 'File'}
+        </Badge>
+      );
+    } else {
+      return <p className="text-sm text-muted-foreground">Click to choose file</p>;
     }
   };
 
-  const handleContactInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (selectedStore) {
-      setSelectedStore({ ...selectedStore, contact_info: e.target.value });
-    }
-  };
-
-  const handleContractInfoChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (selectedStore) {
-      setSelectedStore({ ...selectedStore, contract_info: e.target.value });
-    }
-  };
-
-  const handleCountryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddressFields({ ...addressFields, country: e.target.value });
-  };
-
-  const handleCityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddressFields({ ...addressFields, city: e.target.value });
-  };
-
-  const handleDetailedAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddressFields({ ...addressFields, detailedAddress: e.target.value });
-  };
-
-  const handlePostalCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAddressFields({ ...addressFields, postalCode: e.target.value });
-  };
-
-// Render file information
-const renderFileInfo = (fileUrl?: string) => {
-  if (contractFile) {
-    return (
-      <Badge variant="outline" className="flex gap-1 items-center">
-        <FileText className="h-3 w-3" />
-        {contractFile.name}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRemoveContractFile();
-          }}
-        >
-        </Button>
-      </Badge>
-    );
-  } else if (fileUrl) {
-    return (
-      <Badge variant="outline" className="flex gap-1 items-center">
-        <FileText className="h-3 w-3" />
-        {fileUrl.split('/').pop()}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-4 w-4 p-0 ml-1 hover:bg-muted rounded-full"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRemoveContractFile();
-          }}
-        >
-        </Button>
-      </Badge>
-    );
-  } else {
-    return <p className="text-sm text-muted-foreground">Click to choose file</p>;
-  }
-};
-
-// Contract file component for edit
-const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
-  <div className="space-y-2">
-    <Label htmlFor="contractFile">Contract File</Label>
-    <div className="border rounded-md p-2 relative">
-      <div className="flex flex-wrap gap-2">
-        {renderFileInfo(fileUrl)} {/* Always render the custom UI */}
+  // Restore Contract file component for edit
+  const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
+    <div className="space-y-2">
+      <div className="flex justify-between items-baseline mb-2">
+        <Label htmlFor="contractFile">Contract File</Label>
+        <span className="text-xs text-muted-foreground mb-1 mr-8">(Supported formats: PDF, DOC, DOCX, Pages)</span>
       </div>
-      <Input
-        id="contractFile"
-        type="file"
-        accept=".pdf,.doc,.docx,.txt,.pages"
-        onChange={handleContractFileChange}
-        className="absolute inset-0 opacity-0 cursor-pointer file:hidden" 
-      />
+      <div className="border rounded-md relative flex items-center min-h-[40px] p-2 overflow-hidden">
+        <div className="flex-grow flex flex-wrap gap-2 mr-2">
+          {renderFileInfo(fileUrl)}
+        </div>
+        <Input
+          id="contractFile"
+          type="file"
+          accept=".pdf,.doc,.docx,.pages"
+          onChange={handleContractFileChange}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+        />
+      </div>
     </div>
-  </div>
-);
+  );
+
+  // Log state right before render
+  // console.log('[Render] isLoading:', isLoading, 'stores count:', stores.length, 'filteredStores count:', filteredStores.length);
 
   return (
     <div className="space-y-4">
-      {/* Filters Card */}
+      {/* Restore Filters Card */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -676,6 +687,7 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
               <CardTitle className="text-base">Filters</CardTitle>
             </div>
             <div className="flex flex-wrap items-center gap-4">
+              {/* Status Filter */}
               <div className="flex items-center gap-2">
                 <Label htmlFor="status-filter" className="whitespace-nowrap">Status:</Label>
                 <Select
@@ -692,6 +704,7 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
                   </SelectContent>
                 </Select>
               </div>
+              {/* City Filter */}
               <div className="flex items-center gap-2">
                 <Label htmlFor="city-filter" className="whitespace-nowrap">City:</Label>
                 <Select
@@ -715,6 +728,7 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
           </div>
         </CardHeader>
         <CardContent>
+          {/* Restore Table */}
           <Table>
             <TableHeader>
               <TableRow>
@@ -727,13 +741,33 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStores.length === 0 ? (
+              {/* Apply loading logic HERE, within the original TableBody structure */}
+              {isLoading && stores.length === 0 ? (
+                // Display Skeleton rows while loading
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={`loading-${index}`}>
+                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                        <Skeleton className="h-8 w-8 rounded-md" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : filteredStores.length === 0 ? (
+                // Display No Results row
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                     No stores found matching the selected filters.
                   </TableCell>
                 </TableRow>
               ) : (
+                // Render actual store rows using original structure
                 filteredStores.map((store) => (
                   <TableRow key={store.store_id}>
                     <TableCell className="font-medium">{store.store_name}</TableCell>
@@ -746,7 +780,7 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Phone className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{store.contact_info}</span>
+                        <span className="text-sm">{store.contact_info || '-'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -761,13 +795,14 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="icon" onClick={() => handleViewDetails(store)}>
+                      <div className="flex justify-end gap-[2px]">
+                        <Button variant="outline" size="icon" className="border-none" onClick={() => handleViewDetails(store)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="outline"
                           size="icon"
+                          className="border-none"
                           onClick={() => handleEditStore(store)}
                         >
                           <Edit className="h-4 w-4" />
@@ -782,195 +817,112 @@ const ContractFileComponent = ({ fileUrl }: { fileUrl?: string }) => (
         </CardContent>
       </Card>
 
-      {/* Edit Store Dialog with Scrollable Content */}
+      {/* Edit Store Dialog (Keep existing structure) */}
       <Dialog
         open={isEditMode}
         onOpenChange={(open) => {
           setIsEditMode(open);
           if (!open) {
             setValidationError(null);
-            setAddressFields({
-              country: "",
-              city: "",
-              detailedAddress: "",
-              postalCode: "",
-            });
           }
         }}
       >
-        <DialogContent className="sm:max-w-md max-h-[80vh] rounded-md border overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Edit Store</DialogTitle>
-            <DialogDescription>
-              Update the details of the existing store.
-            </DialogDescription>
-          </DialogHeader>
-          {/* 将 ScrollArea 包裹具体滚动区域 */}
-          {/* Add a dummy focusable element with tabIndex={0} and a ref */}
-          <div
-            ref={(node) => {
-              if (node && isEditMode) {
-                node.focus(); // Focus this element when the dialog opens
-              }
-            }}
-            tabIndex={0}
-            className="absolute w-0 h-0 overflow-hidden outline-none"
-            aria-hidden="true"
-          />
-          <ScrollArea className="max-h-[60vh] w-full">
-            <div className="py-4 space-y-4 pr-4">
-              <div className="space-y-2">
-                <Label htmlFor="editStoreName">Store Name</Label>
-                <Input
-                  id="editStoreName"
-                  placeholder="Enter store name"
-                  value={selectedStore?.store_name || ""}
-                  onChange={handleStoreNameChange}
-                  className={
-                    validationError === "Store name is required"
-                      ? "border-destructive"
-                      : ""
-                  }
-                />
-                {validationError === "Store name is required" && (
-                  <p className="text-sm text-destructive">Store name is required</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Address</Label>
+         <DialogContent className="sm:max-w-md max-h-[80vh] rounded-md border overflow-hidden">
+           <DialogHeader>
+             <DialogTitle>Edit Store</DialogTitle>
+             <DialogDescription>
+               Update the details of the existing store.
+             </DialogDescription>
+           </DialogHeader>
+           <ScrollArea className="max-h-[60vh] w-full">
+             <div className="py-4 space-y-4 pr-4">
                 <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="editCountry"
-                        className="text-sm font-normal mb-1 text-muted-foreground"
-                      >
-                        Country
-                      </Label>
-                      <Input
-                        id="editCountry"
-                        placeholder="e.g., China"
-                        value={addressFields.country}
-                        onChange={handleCountryChange}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="editCity"
-                        className="text-sm font-normal mb-1 text-muted-foreground"
-                      >
-                        City
-                      </Label>
-                      <Input
-                        id="editCity"
-                        placeholder="e.g., Shanghai"
-                        value={addressFields.city}
-                        onChange={handleCityChange}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="editDetailedAddress"
-                      className="text-sm font-normal mb-1 text-muted-foreground"
-                    >
-                      Detailed Address
-                    </Label>
-                    <Input
-                      id="editDetailedAddress"
-                      placeholder="e.g., 123 Nanjing East Road, Huangpu District"
-                      value={addressFields.detailedAddress}
-                      onChange={handleDetailedAddressChange}
-                    />
-                  </div>
-                  <div>
-                    <Label
-                      htmlFor="editPostalCode"
-                      className="text-sm font-normal mb-1 text-muted-foreground"
-                    >
-                      Postal Code (Optional)
-                    </Label>
-                    <Input
-                      id="editPostalCode"
-                      placeholder="Enter postal code"
-                      value={addressFields.postalCode}
-                      onChange={handlePostalCodeChange}
-                    />
-                  </div>
-                </div>
-                {validationError === "Address is required" && (
-                  <p className="text-sm text-destructive">Address is required</p>
-                )}
-                {validationError === "Country and city are required" && (
-                  <p className="text-sm text-destructive">
-                    Country and city are required
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editContactInfo">Contact Information</Label>
-                <Input
-                  id="editContactInfo"
-                  placeholder="Enter contact information"
-                  value={selectedStore?.contact_info || ""}
-                  onChange={handleContactInfoChange}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="editContractInfo">Contract Information</Label>
-                <Textarea
-                  id="editContractInfo"
-                  placeholder="Enter contract details"
-                  value={selectedStore?.contract_info || ""}
-                  onChange={handleContractInfoChange}
-                />
-              </div>
-              <ContractFileComponent fileUrl={selectedStore?.contract_file_url} />
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="editActiveStatus"
-                    checked={selectedStore?.is_active}
-                    onCheckedChange={(checked) => {
-                      if (selectedStore) {
-                        setSelectedStore({
-                          ...selectedStore,
-                          is_active: checked,
-                        });
-                      }
-                    }}
+                  <Label htmlFor="editStoreName">Store Name</Label>
+                  <Input
+                    id="editStoreName"
+                    type="text"
+                    placeholder="Enter store name"
+                    value={selectedStore?.store_name || ""}
+                    onChange={handleStoreNameChange}
+                    className={
+                      validationError === "Store name is required"
+                        ? "border-destructive"
+                        : ""
+                    }
                   />
-                  <Label htmlFor="editActiveStatus" className="text-sm font-normal">
-                    {selectedStore?.is_active ? "Active" : "Inactive"}
-                  </Label>
+                  {validationError === "Store name is required" && (
+                    <p className="text-sm text-destructive">Store name is required</p>
+                  )}
                 </div>
-              </div>
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsEditMode(false);
-                setValidationError(null);
-                setAddressFields({
-                  country: "",
-                  city: "",
-                  detailedAddress: "",
-                  postalCode: "",
-                });
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSaveStore} disabled={isLoading}>
-              {isLoading ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-baseline mb-2">
+                    <Label htmlFor="editAddress">Address</Label>
+                    <span className="text-xs text-muted-foreground mr-[12px]">(e.g.,Nanjing Road, Huangpu District, Shanghai, China)</span>
+                  </div>
+                  <Textarea
+                    id="editAddress"
+                    placeholder="Enter store address..."
+                    value={selectedStore?.address || ""}
+                    onChange={handleAddressTextAreaChange}
+                    rows={3}
+                    className={validationError === "Address is required" ? "border-destructive" : ""}
+                  />
+                  {validationError === "Address is required" && (
+                    <p className="text-sm text-destructive">Address is required</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editContactInfo">Contact Info</Label>
+                  <Input
+                    id="editContactInfo"
+                    type="text"
+                    placeholder="Enter contact information"
+                    value={selectedStore?.contact_info || ""}
+                    onChange={handleContactInfoChange}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editContractInfo">Contract Info</Label>
+                  <Textarea
+                    id="editContractInfo"
+                    placeholder="Enter contract details"
+                    value={selectedStore?.contract_info || ""}
+                    onChange={handleContractInfoChange}
+                  />
+                </div>
+                <ContractFileComponent fileUrl={selectedStore?.contract_file_url} />
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="editActiveStatus"
+                      checked={selectedStore?.is_active}
+                      onCheckedChange={handleActiveStatusChange}
+                    />
+                    <Label htmlFor="editActiveStatus" className="text-sm font-normal">
+                      {selectedStore?.is_active ? "Active" : "Inactive"}
+                    </Label>
+                  </div>
+                </div>
+             </div>
+           </ScrollArea>
+           <DialogFooter>
+             <Button
+               variant="outline"
+               onClick={() => {
+                 setIsEditMode(false);
+                 setValidationError(null);
+               }}
+             >
+               Cancel
+             </Button>
+             <Button onClick={handleSaveStore} disabled={isLoading}>
+               {isLoading ? "Saving..." : "Save"}
+             </Button>
+           </DialogFooter>
+         </DialogContent>
       </Dialog>
 
-      {/* Store Details Dialog */}
+      {/* Store Details Dialog (Ensure correct props) */}
       <StoreDetailsDialog
         store={storeToView}
         open={isDetailsDialogOpen}

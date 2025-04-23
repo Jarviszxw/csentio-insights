@@ -249,6 +249,7 @@ async def get_gmv_by_dimension(
             return await metrics_service.get_gmv_by_city(supabase, start_date, end_date, limit)
         
     except Exception as e:
+        
         logger.error(f"Failed to get GMV by {dimension}: {str(e)}")
         # 返回模拟数据作为备用
         dimension_key = {"store": "store", "product": "product", "city": "city"}[dimension]

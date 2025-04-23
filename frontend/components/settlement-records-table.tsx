@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDateRange } from "./date-range-context";
 import { useSettlementView } from "./settlement-filter";
+import { Textarea } from "./ui/textarea";
 
 interface SettlementRecord {
   id: string;
@@ -415,12 +416,12 @@ export function SettlementRecordsTable() {
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Settlement Record</DialogTitle>
+            <DialogTitle>New Settlement Record</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="settle_date">Settlement Date</Label>
+                <Label htmlFor="settle_date">Date</Label>
                 <Input
                   id="settle_date"
                   type="date"
@@ -490,7 +491,7 @@ export function SettlementRecordsTable() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="remarks">Remarks</Label>
-              <Input
+              <Textarea
                 id="remarks"
                 value={newRecord.remarks || ''}
                 onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}

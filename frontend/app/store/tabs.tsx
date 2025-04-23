@@ -50,6 +50,7 @@ interface CityData {
 export function StoreTabs() {
   const { viewMode, setViewMode, setStoreId } = useStoreView();
   const [isAddStoreDialogOpen, setIsAddStoreDialogOpen] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [newStore, setNewStore] = useState<Partial<StoreData>>({
     store_name: "",
     address: "",
@@ -103,44 +104,100 @@ export function StoreTabs() {
     country: string | null;
   } | null> => {
     try {
-      const cleanedAddress = address.trim().replace(/\s+/g, ' ').replace(/,+/g, ',');
-      console.log('Geocoding address:', cleanedAddress);
-      
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanedAddress)}&format=json&addressdetails=1&limit=1&accept-language=zh`,
-        {
-          headers: {
-            'User-Agent': 'StoreMapApp (your-email@example.com)',
-          },
+      const attemptGeocode = async (addr: string): Promise<{
+        latitude: number;
+        longitude: number;
+        cityName: string | null;
+        country: string | null;
+      } | null> => {
+        const cleanedAddress = addr.trim().replace(/\s+/g, ' ').replace(/,+/g, ',');
+        console.log('Geocoding address:', cleanedAddress);
+  
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanedAddress)}&format=json&addressdetails=1&limit=1&accept-language=zh`,
+          {
+            headers: {
+              'User-Agent': 'StoreMapApp (Jarviszxw1024@gmail.com)',
+            },
+          }
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
         }
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      console.log('Nominatim response:', data);
-
-      if (data.length === 0) {
-        throw new Error("No results found for the address. Ensure the address is detailed and correctly formatted.");
-      }
-
-      const result = data[0];
-      const latitude = parseFloat(result.lat);
-      const longitude = parseFloat(result.lon);
-      const cityName = result.address.city || result.address.town || result.address.village || null;
-      const country = result.address.country || null;
-
-      if (!latitude || !longitude) {
-        throw new Error("Invalid coordinates returned");
-      }
-
-      return {
-        latitude,
-        longitude,
-        cityName,
-        country,
+  
+        const data = await response.json();
+        console.log('Nominatim response:', data);
+  
+        if (data.length === 0) {
+          return null;
+        }
+  
+        const result = data[0];
+        const latitude = parseFloat(result.lat);
+        const longitude = parseFloat(result.lon);
+        
+        // Extract city name properly - prioritize city over district
+        let cityName = null;
+        // First look for city
+        if (result.address.city) {
+          cityName = result.address.city;
+        } 
+        // If no city, check for town
+        else if (result.address.town) {
+          cityName = result.address.town;
+        }
+        // If no town, check for village 
+        else if (result.address.village) {
+          cityName = result.address.village;
+        }
+        // If no village, check for county
+        else if (result.address.county) {
+          cityName = result.address.county;
+        }
+        
+        // Extract country
+        const country = result.address.country || null;
+  
+        if (!latitude || !longitude) {
+          throw new Error("Invalid coordinates returned");
+        }
+  
+        return {
+          latitude,
+          longitude,
+          cityName,
+          country,
+        };
       };
+  
+      // 将地址按逗号分隔
+      const addressParts = address.split(',').map(part => part.trim());
+  
+      // 先尝试完整地址
+      let result = await attemptGeocode(address);
+      if (result) return result;
+  
+      // 如果地址部分超过两个（国家+城市+详细地址），逐步减少详细地址部分
+      if (addressParts.length > 2) {
+        // 去掉最后一部分（例如去掉门牌号）
+        let reducedAddress = addressParts.slice(0, -1).join(', ');
+        result = await attemptGeocode(reducedAddress);
+        if (result) return result;
+  
+        // 如果还有更多部分，继续减少（例如去掉街道）
+        if (addressParts.length > 3) {
+          reducedAddress = addressParts.slice(0, -2).join(', ');
+          result = await attemptGeocode(reducedAddress);
+          if (result) return result;
+        }
+      }
+  
+      // 最后回退到国家+城市
+      const fallbackAddress = addressParts.slice(0, 2).join(', ');
+      result = await attemptGeocode(fallbackAddress);
+      if (result) return result;
+  
+      throw new Error("No results found for the address after all attempts. Ensure the address is detailed and correctly formatted.");
     } catch (error) {
       console.error('Error geocoding address:', error);
       throw error;
@@ -182,6 +239,23 @@ export function StoreTabs() {
   // Upload contract file to Supabase storage
   const uploadContractFile = async (file: File, storeId: number): Promise<string | null> => {
     try {
+      // Validate file type to avoid unsupported MIME type errors
+      const validFileTypes = [
+        'application/pdf', // PDF
+        'application/msword', // DOC
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+        'application/x-iwork-pages-sffpages', // Pages
+        'application/vnd.apple.pages', // Alternative MIME type for Pages
+      ];
+      
+      // Use file extension for validation instead of strict MIME type checking
+      const fileExt = file.name.split(".").pop()?.toLowerCase() || '';
+      
+      // Validate file extension matches allowed types
+      if (!['pdf', 'doc', 'docx', 'pages'].includes(fileExt)) {
+        throw new Error(`File extension ".${fileExt}" is not supported. Please use PDF, DOC, DOCX, or Pages files.`);
+      }
+      
       const bucketName = "csentio-contracts";
       const bucketExists = await ensureBucketExists(bucketName);
 
@@ -189,20 +263,56 @@ export function StoreTabs() {
         throw new Error("Failed to ensure bucket exists");
       }
 
-      const fileExt = file.name.split(".").pop();
+      const originalName = file.name; // Store original name
       const fileName = `${Date.now()}-${storeId}.${fileExt}`;
       const filePath = `contracts/${fileName}`;
 
-      const { error } = await supabase.storage.from(bucketName).upload(filePath, file);
+      console.log(`Uploading file: ${filePath}, type: ${file.type}, size: ${Math.round(file.size/1024)}KB`);
 
-      if (error) throw error;
+      // For Pages files, use a generic content type if needed
+      const contentType = 
+        fileExt === 'pages' && !validFileTypes.includes(file.type) 
+          ? 'application/octet-stream' 
+          : file.type;
+
+      const { error } = await supabase.storage.from(bucketName).upload(filePath, file, {
+        contentType: contentType,
+        upsert: true,
+        duplex: 'half',
+        metadata: {
+          originalName: originalName
+        }
+      });
+
+      if (error) {
+        console.error('Error uploading file:', error);
+        
+        if (error.message.includes('mime type') || error.message.includes('not supported')) {
+          // For MIME type errors with .pages files
+          if (fileExt === 'pages') {
+            throw new Error(`Pages files are not supported by default. Please configure your Supabase bucket to allow all file types.`);
+          } else {
+            throw new Error(`File type not supported. Please use PDF, DOC, DOCX, or Pages files only.`);
+          }
+        }
+        
+        throw error;
+      }
 
       const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
 
-      return urlData.publicUrl;
+      if (!urlData?.publicUrl) {
+        throw new Error('Failed to get public URL');
+      }
+      
+      // Add original filename as a query parameter
+      const url = new URL(urlData.publicUrl);
+      url.searchParams.append('originalName', encodeURIComponent(originalName));
+      
+      return url.toString();
     } catch (error) {
       console.error("Error uploading contract file:", error);
-      toast.error("Failed to upload file");
+      toast.error(error instanceof Error ? error.message : "Failed to upload file");
       return null;
     }
   };
@@ -250,37 +360,41 @@ export function StoreTabs() {
       let latitude: number | null = null;
       let longitude: number | null = null;
       let cityId: number | null = null;
+      let cityAdded = false;
 
       if (fullAddress.trim()) {
         const geocodedData = await geocodeAddress(fullAddress);
         if (geocodedData) {
           latitude = geocodedData.latitude;
           longitude = geocodedData.longitude;
-          const cityName = geocodedData.cityName;
-          const country = geocodedData.country;
+          
+          // Use the manually entered city name instead of geocoded city
+          const manualCityName = newStoreAddressFields.city.trim();
+          
+          // Find matching city in database - use exact match only
+          const matchedCity = cities.find(city => 
+            city.city_name.toLowerCase() === manualCityName.toLowerCase()
+          );
 
-          if (cityName) {
-            const matchedCity = cities.find(city => 
-              city.city_name.toLowerCase() === cityName.toLowerCase()
-            );
+          if (matchedCity) {
+            cityId = matchedCity.id;
+          } else {
+            // Create new city with manual city name
+            const { data: newCityData, error: cityError } = await supabase
+              .from('cities')
+              .insert({
+                city_name: manualCityName,
+                country: newStoreAddressFields.country.trim() || geocodedData.country || 'Unknown',
+              })
+              .select();
 
-            if (matchedCity) {
-              cityId = matchedCity.id;
-            } else {
-              const { data: newCityData, error: cityError } = await supabase
-                .from('cities')
-                .insert({
-                  city_name: cityName,
-                  country: country || newStoreAddressFields.country || 'Unknown',
-                })
-                .select();
+            if (cityError) throw cityError;
 
-              if (cityError) throw cityError;
-
-              if (newCityData && newCityData[0]) {
-                setCities([...cities, newCityData[0]]);
-                cityId = newCityData[0].id;
-              }
+            if (newCityData && newCityData[0]) {
+              // Update local cities state for immediate UI update
+              setCities(prevCities => [...prevCities, newCityData[0]]);
+              cityId = newCityData[0].id;
+              cityAdded = true;
             }
           }
         }
@@ -313,6 +427,7 @@ export function StoreTabs() {
 
       if (data && data[0]) {
         toast.success("Store added successfully");
+        setRefreshTrigger(prev => prev + 1); // Trigger refresh after successful addition
       }
 
       setIsAddStoreDialogOpen(false);
@@ -389,7 +504,12 @@ export function StoreTabs() {
   // Contract file component
   const ContractFileComponent = () => (
     <div className="space-y-2">
-      <Label htmlFor="contractFile">Contract File</Label>
+      <div className="flex justify-between items-baseline mb-2">
+        <Label htmlFor="contractFile">Contract File</Label>
+        <span className="text-xs text-muted-foreground mb-1 mr-8">(Supported formats: PDF, DOC, DOCX, Pages)</span>
+      </div>
+      
+                    
       <div className="border rounded-md p-2 relative">
         <div className="flex flex-wrap gap-2">{renderFileInfo()}</div>
         <Input
@@ -436,11 +556,11 @@ export function StoreTabs() {
         </div>
 
         <TabsContent value="map" className="m-0">
-          <StoreMapWrapper className="h-[calc(100vh-240px)]" />
+          <StoreMapWrapper className="h-[calc(100vh-240px)]" refreshTrigger={refreshTrigger} />
         </TabsContent>
 
         <TabsContent value="list" className="m-0">
-          <StoreList />
+          <StoreList refreshTrigger={refreshTrigger} />
         </TabsContent>
       </Tabs>
 

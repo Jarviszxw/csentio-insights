@@ -219,7 +219,7 @@ export function MapComponents({
             `
             <div class="min-w-[280px] border-none shadow-lg rounded-xl bg-white transition-all duration-300 hover:shadow-xl">
               <div class="px-3 pt-2 py-3">
-                <div class="text-lg font-medium flex items-center gap-2 text-gray-900">
+                <div class="text-[16px] font-medium flex items-center gap-2 text-gray-900">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500">
                     <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/>
                     <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
@@ -247,7 +247,7 @@ export function MapComponents({
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-1 text-gray-400">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z"/>
                   </svg>
-                  <span class="text-sm text-gray-600 leading-relaxed">${store.contact_info}</span>
+                  <span class="text-sm text-gray-600 leading-relaxed mb-[2px]">${store.contact_info}</span>
                 </div>
               </div>
             </div>
@@ -255,9 +255,10 @@ export function MapComponents({
           )
         );
 
-        marker.on('click', () => {
-          onSelectStore(store);
-        });
+        // Remove the custom click listener that might interfere with the default popup opening
+        // marker.on('click', () => {
+        //   onSelectStore(store);
+        // });
 
         // Add event listener for the "View Details" button in the popup
         marker.on('popupopen', () => {

@@ -22,6 +22,7 @@ const MapComponents = dynamic(
 
 interface StoreMapWrapperProps {
   className?: string;
+  refreshTrigger?: number;
 }
 
 interface StoreLocation {
@@ -54,7 +55,7 @@ const calculateMapCenter = (locations: StoreLocation[]) => {
   ];
 };
 
-export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
+export function StoreMapWrapper({ className, refreshTrigger = 0 }: StoreMapWrapperProps) {
   const { storeId, isAddStoreOpen, setStoreId, setViewMode, setIsAddStoreOpen } = useStoreView();
   const [storeLocations, setStoreLocations] = React.useState<StoreLocation[]>([]);
   const [selectedStore, setSelectedStore] = React.useState<StoreLocation | null>(null);
@@ -111,7 +112,7 @@ export function StoreMapWrapper({ className }: StoreMapWrapperProps) {
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, []);
+  }, [refreshTrigger]);
   
   // When a store is selected, update the context
   React.useEffect(() => {

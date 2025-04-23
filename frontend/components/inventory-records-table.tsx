@@ -36,6 +36,7 @@ import {
   import { ScrollArea } from "@/components/ui/scroll-area";
   import { Checkbox } from "@/components/ui/checkbox";
   import { X } from "lucide-react";
+import { Textarea } from "./ui/textarea";
   
   interface InventoryRecord {
     id: string;
@@ -419,12 +420,12 @@ import {
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogContent className="sm:max-w-[550px]">
             <DialogHeader>
-              <DialogTitle>Add Inventory Record</DialogTitle>
+              <DialogTitle>New Inventory Record</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="inventory_date">Inventory Date</Label>
+                  <Label htmlFor="inventory_date">Date</Label>
                   <DatePicker
                     date={inventoryDate} 
                     setDate={setInventoryDate} 
@@ -520,7 +521,7 @@ import {
               
               <div className="space-y-2">
                 <Label htmlFor="remarks">Remarks</Label>
-                <Input
+                <Textarea
                   id="remarks"
                   value={newRecord.remarks || ''}
                   onChange={(e) => setNewRecord({...newRecord, remarks: e.target.value})}
