@@ -1,7 +1,8 @@
+// settlement-statistics.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useDateRange } from "./date-range-context"; // Adjust path as needed
+import { useDateRange } from "./date-range-context";
 import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,6 +13,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { API_BASE_URL } from "@/lib/api";
+import { formatDateToISOString } from "@/lib/utils";
 
 type MetricData = {
   value: number;
@@ -29,11 +32,16 @@ export function SettlementStatistics() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const start = dateRange?.from ? dateRange.from.toISOString().split("T")[0] : "";
-        const end = dateRange?.to ? dateRange.to.toISOString().split("T")[0] : "";
+        const params = new URLSearchParams();
+        if (dateRange?.from) {
+          params.append("start_date", formatDateToISOString(dateRange.from));
+        }
+        if (dateRange?.to) {
+          params.append("end_date", formatDateToISOString(dateRange.to));
+        }
 
         // Fetch GMV data
-        const gmvResponse = await fetch(`http://localhost:8000/api/metrics/total-gmv?start_date=${start}&end_date=${end}`);
+        const gmvResponse = await fetch(`${API_BASE_URL}/metrics/total-gmv?${params.toString()}`);
         if (!gmvResponse.ok) throw new Error("Failed to fetch GMV data");
         const gmvResult = await gmvResponse.json();
         setGmvData({
@@ -43,7 +51,7 @@ export function SettlementStatistics() {
         });
 
         // Fetch Sales data
-        const salesResponse = await fetch(`/api/metrics/total-sales?start_date=${start}&end_date=${end}`);
+        const salesResponse = await fetch(`${API_BASE_URL}/metrics/total-sales?${params.toString()}`);
         if (!salesResponse.ok) throw new Error("Failed to fetch Sales data");
         const salesResult = await salesResponse.json();
         setSalesData({
@@ -65,7 +73,7 @@ export function SettlementStatistics() {
   };
 
   const formattedGMV = `¥${gmvData.value.toLocaleString()}`;
-  const formattedSales = gmvData.value.toLocaleString();
+  const formattedSales = salesData.value.toLocaleString();
 
   return (
     <div className="flex w-full gap-4 overflow-x-auto [&>*]:min-w-[280px] [&>*]:flex-1">

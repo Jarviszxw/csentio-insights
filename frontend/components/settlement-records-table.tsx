@@ -1,3 +1,4 @@
+// settlement-records-table.tsx
 "use client";
 
 import * as React from "react";
@@ -48,39 +49,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { EditSettlementDialog, SettlementUpdatePayload } from "./edit-settlement-dialog";
 import { Skeleton } from "./ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { fetchSettlementRecords } from "@/lib/api";
+import { fetchSettlementRecords, SettlementRecord, SettlementItem } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { Separator } from "@/components/ui/separator";
 
-interface SettlementRecord {
-  id: string;
-  settle_date: string;
-  store: string;
-  store_id?: number;
-  total_amount?: number;
-  remarks?: string;
-  created_by: string;
-  items?: SettlementItemDB[];
-  settle_date_obj?: Date;
-}
-
+// Restore necessary local type definitions
 interface SettlementItemForm {
   product_id?: number;
   quantity?: number;
   unit_price?: number;
-}
-
-interface SettlementItemDB {
-  item_id: number;
-  settlement_id: number;
-  product_id: number;
-  quantity: number;
-  price: number;
-  products?: {
-    id: number;
-    name: string;
-    code: string;
-  }
 }
 
 interface Product {
@@ -90,21 +67,15 @@ interface Product {
   price?: number;
 }
 
+// Restore SettlementResponse locally if not exported from lib/api
 interface SettlementResponse {
   settlement_id: number;
   settle_date: string;
   store_id: number;
   total_amount: number;
-  remarks: string;
-  created_by: string;
-  items: SettlementItemDB[];
-}
-
-interface SettlementUpdate {
-  settle_date: string;
-  store_id: number;
-  total_amount: number;
-  remarks: string;
+  remarks: string | null;
+  created_by: string | null;
+  items: SettlementItem[]; // Use imported SettlementItem
 }
 
 export function SettlementRecordsTable() {
@@ -113,11 +84,26 @@ export function SettlementRecordsTable() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [selectedRecord, setSelectedRecord] = React.useState<SettlementRecord | null>(null);
+
+  let start: Date | undefined;
+  let end: Date | undefined;
+
+  if (dateRange?.from && dateRange?.to) {
+    const fromDate = new Date(dateRange.from);
+    const toDate = new Date(dateRange.to);
+
+    start = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+    end = new Date(toDate.getFullYear(), toDate.getMonth() + 1, 0);
+  }
+
+  // 将 storeId 转换为整数
+  const storeIdNum = storeId && storeId !== "all" ? parseInt(storeId) : undefined;
+
   const { data: records = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery<SettlementRecord[]>({
-    queryKey: ['settlementRecords', storeId],
-    queryFn: () => fetchSettlementRecords(storeId),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    queryKey: ['settlementRecords', storeIdNum, start, end],
+    queryFn: () => fetchSettlementRecords(storeIdNum?.toString(), start, end),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
     retry: 1,
     retryDelay: 1000,
   });
@@ -128,8 +114,9 @@ export function SettlementRecordsTable() {
 
   const [settlementItems, setSettlementItems] = React.useState<SettlementItemForm[]>([{ product_id: undefined, quantity: 1, unit_price: 0 }]);
 
-  const [newRecord, setNewRecord] = React.useState<Partial<SettlementRecord>>({
-    settle_date_obj: new Date(),
+  // Use settle_date (string) instead of settle_date_obj (Date) in state
+  const [newRecord, setNewRecord] = React.useState<Partial<SettlementRecord & { settle_date: string | undefined }>>({
+    settle_date: format(new Date(), 'yyyy-MM-dd'), // Initialize with today's date as string
     total_amount: 0,
     store_id: undefined,
     remarks: ''
@@ -147,7 +134,7 @@ export function SettlementRecordsTable() {
   const [isFetchingItems, setIsFetchingItems] = React.useState(false);
 
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<SettlementItemDB[]>([]);
+  const [selectedItems, setSelectedItems] = useState<SettlementItem[]>([]);
   const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null);
 
   const itemsPerPage = 5;
@@ -183,9 +170,8 @@ export function SettlementRecordsTable() {
   };
 
   const handleAddRecord = async () => {
-    const settleDateString = newRecord.settle_date_obj 
-        ? format(newRecord.settle_date_obj, 'yyyy-MM-dd') 
-        : new Date().toISOString().split('T')[0];
+    // Use newRecord.settle_date directly (already string)
+    const settleDateString = newRecord.settle_date || format(new Date(), 'yyyy-MM-dd');
 
     if (!newRecord.store_id || settlementItems.some(item => !item.product_id || !item.quantity)) {
         console.error("Missing required fields: Store ID or Item details");
@@ -225,13 +211,13 @@ export function SettlementRecordsTable() {
         console.log("API Response:", createdData);
         setIsAddDialogOpen(false);
         setNewRecord({
-          settle_date_obj: new Date(), 
+          settle_date: format(new Date(), 'yyyy-MM-dd'), // Reset with today's string date
           total_amount: 0,
           store_id: undefined,
           remarks: ''
         });
         setSettlementItems([{ product_id: undefined, quantity: 1, unit_price: 0 }]);
-
+        await refetchRecords();
     } catch (error) {
         console.error("Failed to submit settlement:", error);
     } finally {
@@ -336,7 +322,7 @@ export function SettlementRecordsTable() {
 
   const handleViewItems = async (record: SettlementRecord) => {
       console.log("Viewing items for record ID:", record.id);
-      setSelectedSettlementId(record.id); 
+      setSelectedSettlementId(record.id);
       setIsFetchingItems(true);
       setIsItemModalOpen(true);
       setSelectedItems([]);
@@ -346,22 +332,22 @@ export function SettlementRecordsTable() {
           if (isNaN(settlementIdNumber)) {
               throw new Error("Invalid Settlement ID format");
           }
-          const response = await fetch(`http://localhost:8000/api/settlements/${settlementIdNumber}`);
+          const response = await fetch(`${API_BASE_URL}/settlement/${settlementIdNumber}`);
           if (!response.ok) {
               const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch items' }));
               throw new Error(errorData.detail || `HTTP error ${response.status}`);
           }
           const data: SettlementResponse = await response.json();
-          const itemsToShow = data.items.map(item => ({ 
+          const itemsToShow: SettlementItem[] = data.items.map(item => ({
               item_id: item.item_id,
               settlement_id: item.settlement_id,
               product_id: item.product_id,
               quantity: item.quantity,
               price: item.price,
               products: item.products ? {
-                 id: item.products.id,
-                 name: item.products.name,
-                 code: item.products.code
+                 product_id: item.products.product_id,
+                 sku_name: item.products.sku_name,
+                 sku_code: item.products.sku_code
               } : undefined
           }));
           setSelectedItems(itemsToShow);
@@ -385,7 +371,7 @@ export function SettlementRecordsTable() {
            if (isNaN(settlementIdNumber)) {
                throw new Error("Invalid Settlement ID format for edit");
            }
-           const response = await fetch(`http://localhost:8000/api/settlements/${settlementIdNumber}`);
+           const response = await fetch(`${API_BASE_URL}/settlement/${settlementIdNumber}`);
            if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch record for editing' }));
                 throw new Error(errorData.detail || `HTTP error ${response.status}`);
@@ -407,7 +393,7 @@ export function SettlementRecordsTable() {
         setIsEditingRecord(true);
 
         try {
-             const response = await fetch(`http://localhost:8000/api/settlements/${recordToEdit.settlement_id}`, {
+             const response = await fetch(`${API_BASE_URL}/settlement/${recordToEdit.settlement_id}`, {
                  method: 'PUT',
                  headers: { 'Content-Type': 'application/json' },
                  body: JSON.stringify(updatedData),
@@ -479,10 +465,10 @@ export function SettlementRecordsTable() {
               records.map((record) => (
                 <TableRow key={record.id}>
                   <TableCell>{record.settle_date}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{record.store}</Badge>
+                  <TableCell className="text-left">
+                    {record.store || 'N/A'}
                   </TableCell>
-                  <TableCell>{formatCurrency(record.total_amount || 0)}</TableCell>
+                  <TableCell className="text-center">{formatCurrency(record.total_amount || 0)}</TableCell>
                   <TableCell>{record.remarks || "-"}</TableCell>
                   <TableCell>{record.created_by}</TableCell>
                   <TableCell className="text-right">
@@ -591,24 +577,24 @@ export function SettlementRecordsTable() {
                      <Button
                        variant={"outline"}
                        className={cn(
-                         "w-[180px] justify-start text-left font-normal", 
-                         !newRecord.settle_date_obj && "text-muted-foreground"
+                         "w-[180px] justify-start text-left font-normal",
+                         !newRecord.settle_date && "text-muted-foreground" // Check settle_date string
                        )}
                        onClick={() => setIsDatePickerOpen(true)}
                      >
                        <CalendarIcon className="mr-2 h-4 w-4" />
-                       {newRecord.settle_date_obj && (
-                         format(new Date(newRecord.settle_date_obj), "LLL d, y")
-                       )}
+                       {/* Format string date for display */}
+                       {newRecord.settle_date ? format(new Date(newRecord.settle_date), "LLL d, y") : <span>Pick a date</span>}
                      </Button>
                    </PopoverTrigger>
                    <PopoverContent className="w-auto p-0" align="start">
                      <Calendar
                        mode="single"
-                       selected={newRecord.settle_date_obj}
-                       onSelect={(date) => { 
-                         console.log("Calendar onSelect triggered. Date:", date);
-                         setNewRecord({...newRecord, settle_date_obj: date });
+                       // Provide Date object to Calendar, selected based on string state
+                       selected={newRecord.settle_date ? new Date(newRecord.settle_date) : undefined}
+                       onSelect={(date) => {
+                         // Update state with formatted string date
+                         setNewRecord({...newRecord, settle_date: date ? format(date, 'yyyy-MM-dd') : undefined });
                          setIsDatePickerOpen(false);
                        }}
                      />
@@ -636,45 +622,33 @@ export function SettlementRecordsTable() {
                </div>
              </div>
 
-             {/* --- Start: Modified Header Row for Items --- */}
-             {/* Place Title, Labels, and Button on the same row. Restore mb-2 */}
              <div className="flex items-center justify-between mt-2">
                <Label className="text-base font-medium">Settlement Items</Label>
-               {/* Group Labels and Button */}
                <div className="flex items-center gap-1">
-                 {/* Labels Container */}
                  <div className="flex items-center gap-3">
-                   {/* Unit Price Label: Positioned using fixed width and text-right */}
                    <div className="w-22 text-right">
                      <Label className="text-sm text-muted-foreground">Unit Price</Label>
                    </div>
-                   {/* Qty Label: Positioned using fixed width and text-right */}
                    <div className="w-0 text-right">
                      <Label className="text-sm text-muted-foreground">Qty</Label>
                    </div>
-                   {/* Spacer to account for Delete Button width (approx w-8 for icon + gap-2) */}
                    <div className="w-[calc(theme(spacing.8)+theme(spacing.2))]"></div>
                  </div>
-                 {/* Add Button */}
                  <Button variant="outline" size="sm" onClick={handleAddItem} disabled={loadingProducts}>
                    <Plus className="h-4 w-4" />
                    Add
                  </Button>
                </div>
              </div>
-             {/* --- End: Modified Header Row for Items --- */}
-             {/* Item list - Restore space-y-3 */}
              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2">
                {settlementItems.map((item, index) => (
                  <div key={index} className="flex items-center gap-2">
-                   {/* Product Select (Keep flex-grow) */}
                    <Select
                      value={item.product_id ? String(item.product_id) : ''}
                      onValueChange={(value) => handleItemChange(index, 'product_id', value)}
                      disabled={loadingProducts}
                    >
-                     {/* Keep SelectTrigger and SelectContent as they are */}
-                     <SelectTrigger className="flex-grow max-w-[400px] h-auto py-2 pl-3 pr-2 text-left min-h-12"> {/* Ensure min-h-10 for consistency */}
+                     <SelectTrigger className="flex-grow max-w-[400px] h-auto py-2 pl-3 pr-2 text-left min-h-12">
                        <SelectValue placeholder={loadingProducts ? "Loading..." : "Select product"}>
                          {item.product_id ? (
                            (() => {
@@ -703,7 +677,6 @@ export function SettlementRecordsTable() {
                        ))}
                      </SelectContent>
                    </Select>
-                   {/* Unit Price Input (Keep w-24) */}
                    <div className="relative w-24">
                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">
                        ¥
@@ -719,9 +692,8 @@ export function SettlementRecordsTable() {
                        className="text-center pl-6 min-h-12" 
                      />
                    </div>
-                   {/* Quantity Input (Keep w-16) */}
                    <Input
-                     id={`quantity_${index}`} /* Add id for consistency */
+                     id={`quantity_${index}`}
                      type="number"
                      min="1"
                      placeholder="Qty"
@@ -751,7 +723,7 @@ export function SettlementRecordsTable() {
                    type="number"
                    step="1"
                    min="0"
-                   placeholder="0"
+                   placeholder="0.00"
                    className="w-[120px] min-h-10 text-center" 
                    value={newRecord.total_amount ?? ''} 
                    onChange={(e) => setNewRecord({...newRecord, total_amount: e.target.value ? Number(e.target.value) : undefined})}
@@ -782,42 +754,44 @@ export function SettlementRecordsTable() {
        </Dialog>
 
        <Dialog open={isItemModalOpen} onOpenChange={setIsItemModalOpen}>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[700px]">
             <DialogHeader>
-              <DialogTitle>Settlement Items Details</DialogTitle>
+              <DialogTitle>Settlement Details</DialogTitle>
             </DialogHeader>
             <div className="py-4">
               {isFetchingItems ? (
                  <div className="text-center p-4">Loading items...</div>
               ) : selectedItems.length > 0 ? (
                 <>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Unit Price</TableHead>
-                        <TableHead className="text-right">Line Total</TableHead>
-                      </TableRow>
-                    </TableHeader> 
-                    <TableBody>
-                      {selectedItems.map((item) => (
-                        <TableRow key={item.item_id}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span>{item.products?.name || `Product ID: ${item.product_id}`}</span>
-                              <span className="text-xs text-muted-foreground">{item.products?.code || '-'}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.price)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.quantity * item.price)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="flex items-center justify-between mb-2 px-1 pb-1 border-b">
+                    <Label className="text-sm font-medium text-muted-foreground">Product</Label>
+                    <div className="flex items-center gap-3 text-sm font-medium text-muted-foreground">
+                       <span className="w-20 text-right">Unit Price</span>
+                       <span className="w-12 text-right">Qty</span>
+                       <span className="w-24 text-right">Line Total</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    {selectedItems.map((item) => (
+                      <div key={item.item_id} className="flex items-center justify-between py-1">
+                        <div className="flex flex-col items-start flex-grow mr-2">
+                           <span className="text-sm font-medium truncate" title={item.products?.sku_name ? item.products.sku_name : `Product ID: ${item.product_id}`}>
+                             {item.products?.sku_name ? item.products.sku_name : `Product ID: ${item.product_id}`}
+                           </span>
+                           <span className="text-xs text-muted-foreground">
+                             {item.products?.sku_code ? item.products.sku_code : '-'}
+                           </span>
+                         </div>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="w-20 text-right">{formatCurrency(item.price)}</span>
+                          <span className="w-12 text-right">{item.quantity}</span>
+                          <span className="w-24 text-right font-medium">{formatCurrency(item.quantity * item.price)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                   <div className="mt-4 pt-2 border-t flex justify-end items-center font-semibold">
-                    <span className="mr-4">Total:</span>
+                    <span className="mr-2 py-2">Total:</span>
                     <span>
                       {formatCurrency(
                         selectedItems.reduce((sum, item) => sum + item.quantity * item.price, 0)

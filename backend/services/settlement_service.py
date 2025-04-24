@@ -5,7 +5,7 @@ from datetime import date, datetime
 import logging
 from typing import Optional, List
 
-from models.settlement import SettlementCreate, SettlementUpdate, SettlementResponse, SettlementRecord
+from models.settlement import SettlementCreate, SettlementUpdate, SettlementResponse, SettlementRecord, SettlementProduct
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ async def create_settlement(db: Client, settlement_data: SettlementCreate) -> di
         logger.error(f"Unexpected error creating settlement: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
-async def get_settlement_by_id(db: Client, settlement_id: int) -> dict:
+async def get_settlement_by_id(db: Client, settlement_id: int) -> Optional[dict]:
     try:
         result = db.table("settlements")\
             .select("*, settlement_items(*, products(product_id, sku_name, sku_code))")\
@@ -101,11 +101,20 @@ async def get_settlement_by_id(db: Client, settlement_id: int) -> dict:
             logger.warning(f"Settlement with ID {settlement_id} not found.")
             return None
 
-        logger.info(f"Successfully fetched settlement {settlement_id}")
-        return result.data
+        # Rename 'settlement_items' key to 'items' to match Pydantic model
+        settlement_data = result.data
+        if 'settlement_items' in settlement_data:
+            settlement_data['items'] = settlement_data.pop('settlement_items')
+
+        logger.info(f"Successfully fetched and processed settlement {settlement_id}")
+        return settlement_data # Return the modified data
 
     except Exception as e:
         logger.error(f"Error fetching settlement {settlement_id}: {e}", exc_info=True)
+        # Return None or raise exception based on desired error handling for the caller (router)
+        # Returning None will lead to 404 in the router if this was the initial fetch failure
+        # Raising HTTPException might be better if it's an unexpected processing error
+        # For now, let's re-raise a generic 500 for unexpected errors during fetch/processing
         raise HTTPException(status_code=500, detail=f"Failed to fetch settlement details: {str(e)}")
 
 async def update_settlement(db: Client, settlement_id: int, settlement_data: SettlementUpdate) -> dict:
@@ -202,8 +211,12 @@ async def update_settlement(db: Client, settlement_id: int, settlement_data: Set
 
 async def get_settlement_records(db: Client, store_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[SettlementRecord]:
     try:
-        query = db.table("settlements").select("*, settlement_items(*, products(*))")
-        if store_id:
+        logger.info(f"Fetching settlement records with store_id={store_id}, start_date={start_date}, end_date={end_date}")
+
+        # 简化查询，不再连接 users 表，稍后处理 created_by
+        query = db.table("settlements").select("*, settlement_items(*, products(*)), stores(store_id, store_name)")
+
+        if store_id is not None:
             query = query.eq("store_id", store_id)
         if start_date:
             query = query.gte("settle_date", start_date.isoformat())
@@ -213,42 +226,95 @@ async def get_settlement_records(db: Client, store_id: Optional[int] = None, sta
         result = query.execute()
         settlements = getattr(result, "data", [])
 
-        store_ids = list(set(s.get("store_id") for s in settlements if s.get("store_id")))
-        stores = {}
-        if store_ids:
-            stores_result = db.table("stores").select("store_id, store_name").in_("store_id", store_ids).execute()
-            stores = {store['store_id']: store['store_name'] for store in getattr(stores_result, "data", [])}
-
-        products = {}
-        for settlement in settlements:
-            for item in settlement.get('settlement_items', []):
-                if item.get('products'):
-                    products[item['product_id']] = item['products']['sku_name']
-
         records = []
         for settlement in settlements:
+            # 确保 created_by 字段存在且为字符串（UUID）
+            created_by_value = str(settlement.get('created_by', 'Unknown')) 
+            
+            # 处理 items，确保 products 字段为字符串（产品名称）以匹配 Pydantic 模型
+            processed_items = []
+            for item in settlement.get('settlement_items', []):
+                 product_info = item.get('products')
+                 product_name = product_info.get('sku_name', f"Product {item.get('product_id')}") if product_info else f"Product {item.get('product_id')}"
+                 processed_items.append({
+                     "item_id": item['item_id'],
+                     "product_id": item['product_id'],
+                     "quantity": item['quantity'],
+                     "price": item['price'],
+                     "products": product_name # 使用产品名称字符串
+                 })
+
             record = {
                 "settlement_id": settlement['settlement_id'],
                 "settle_date": settlement['settle_date'],
-                "store": stores.get(settlement['store_id'], f"Store {settlement['store_id']}"),
+                "store": settlement['stores']['store_name'] if settlement.get('stores') else f"Store {settlement['store_id']}",
+                "store_id": settlement['store_id'], # 保持 store_id 字段
                 "total_amount": settlement['total_amount'],
                 "remarks": settlement['remarks'],
-                "created_by": settlement['created_by'],
-                "items": []
+                "created_by": created_by_value, # 使用 UUID 字符串或占位符
+                "items": processed_items
             }
-            items = settlement.get('settlement_items', [])
-            for item in items:
-                record['items'].append({
-                    "item_id": item['item_id'],
-                    "product_id": item['product_id'],
-                    "quantity": item['quantity'],
-                    "price": item['price'],
-                    "products": products.get(item['product_id'], f"Product {item['product_id']}")
-                })
-            records.append(record)
+            # 尝试显式验证每一条记录，以便更快地捕捉 Pydantic 错误
+            try:
+                validated_record = SettlementRecord(**record)
+                records.append(validated_record) # 添加验证后的模型实例
+            except Exception as pydantic_error: # 更具体的可以是 pydantic.ValidationError
+                 logger.error(f"Pydantic validation failed for settlement ID {settlement.get('settlement_id')}: {pydantic_error}")
+                 logger.error(f"Record data causing error: {record}")
+                 #可以选择跳过错误记录或抛出异常
+                 # raise HTTPException(status_code=500, detail=f"Data processing error for settlement {settlement.get('settlement_id')}")
+                 continue # 暂时跳过格式错误的记录
 
+        logger.info(f"Successfully processed {len(records)} settlement records")
         return records
 
+    except HTTPException as http_exc:
+        raise http_exc
     except Exception as e:
         logger.error(f"Error fetching settlement records for store {store_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch settlement records: {str(e)}")
+
+async def get_settlement_products(db: Client, store_id: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[SettlementProduct]:
+    try:
+        logger.info(f"Fetching settlement products for store {store_id}, start_date={start_date}, end_date={end_date}")
+
+        # 首先从 settlement_items 表查询，并关联 settlements 表以应用过滤条件
+        query = db.table("settlement_items").select("*, products(*), settlements!settlement_items_settlement_id_fkey(*)")
+        
+        # 应用过滤条件
+        if store_id:
+            query = query.eq("settlements.store_id", store_id)
+        if start_date:
+            query = query.gte("settlements.settle_date", start_date.isoformat())
+        if end_date:
+            query = query.lte("settlements.settle_date", end_date.isoformat())
+
+        result = query.execute()
+        items = getattr(result, "data", [])
+
+        # 按产品汇总数量
+        product_summary = {}
+        for item in items:
+            product = item.get('products', {})
+            if not product:
+                continue
+            product_id = item['product_id']
+            if product_id not in product_summary:
+                product_summary[product_id] = {
+                    "product_id": product_id,
+                    "sku_name": product.get('sku_name', f"Product {product_id}"),
+                    "sku_code": product.get('sku_code', ''),
+                    "quantity": 0
+                }
+            product_summary[product_id]["quantity"] += item['quantity']
+
+        # 转换为 SettlementProduct 列表
+        products = [SettlementProduct(**data) for data in product_summary.values()]
+        logger.info(f"Fetched {len(products)} settlement products")
+        return products
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error fetching settlement products for store {store_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch settlement products: {str(e)}")

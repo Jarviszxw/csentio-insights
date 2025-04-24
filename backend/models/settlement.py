@@ -86,3 +86,9 @@ class SettlementRecord(BaseModel):
 
     class Config:
         from_attributes = True
+
+class SettlementProduct(BaseModel):
+    product_id: int
+    sku_name: str
+    sku_code: str
+    quantity: int

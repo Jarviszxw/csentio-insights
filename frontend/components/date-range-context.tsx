@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateToISOString } from "@/lib/utils";
 import * as React from "react";
 import { DateRange } from "react-day-picker";
 
@@ -26,8 +27,8 @@ export function DateRangeProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     console.log("DateRangeContext: 日期范围已更新:", 
       dateRange ? {
-        from: dateRange.from?.toISOString().split('T')[0],
-        to: dateRange.to?.toISOString().split('T')[0]
+        from: dateRange.from ? formatDateToISOString(dateRange.from) : 'undefined',
+        to: dateRange.to ? formatDateToISOString(dateRange.to) : 'undefined'
       } : 'undefined');
   }, [dateRange]);
 

@@ -349,9 +349,8 @@ export function InventoryRecordsTable() {
                     <TableCell>
                       {format(new Date(record.inventory_date), "yyyy-MM-dd")}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell className="text-left">
                       {record.store || 'N/A'}
-                      {/* <Badge variant="outline" className="whitespace-nowrap">{record.store || 'N/A'}</Badge> */}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">

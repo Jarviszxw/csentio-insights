@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional   
+from typing import List, Optional
 from datetime import date
 from supabase import Client
 from db.database import get_supabase
 # Use direct imports when running from project root with uvicorn
-from models.settlement import SettlementCreate, SettlementItemCreate, SettlementUpdate, SettlementResponse, SettlementRecord
+from models.settlement import SettlementCreate, SettlementItemCreate, SettlementUpdate, SettlementResponse, SettlementRecord, SettlementProduct
 from services import settlement_service
 import logging
 
@@ -15,6 +15,50 @@ router = APIRouter(prefix="/api/settlement", tags=["settlement"])
 # Define the Settlement response model if needed, maybe excluding items or formatting differently
 # class SettlementResponse(BaseModel): ...
 
+# --- Specific paths FIRST ---
+@router.get("/records", response_model=List[SettlementRecord])
+async def get_settlement_records(
+    supabase: Client = Depends(get_supabase),
+    store_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+):
+    """
+    Retrieves all settlement records for a specific store.
+    """
+    logger.info(f"API Call GET /api/settlement/records for store {store_id}, from {start_date} to {end_date}")
+    try:
+        records = await settlement_service.get_settlement_records(supabase, store_id, start_date, end_date)
+        return records
+    except HTTPException as e:
+        logger.error(f"HTTPException in get_settlement_records for store {store_id}: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in get_settlement_records for store {store_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving settlement records.")
+
+@router.get("/products", response_model=List[SettlementProduct])
+async def get_settlement_products(
+    supabase: Client = Depends(get_supabase),
+    store_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+):
+    """
+    Retrieves settlement products for a specific store.
+    """
+    logger.info(f"API Call GET /api/settlement/products for store {store_id}, from {start_date} to {end_date}")
+    try:
+        products = await settlement_service.get_settlement_products(supabase, store_id, start_date, end_date)
+        return products
+    except HTTPException as e:
+        logger.error(f"HTTPException in get_settlement_products for store {store_id}: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in get_settlement_products for store {store_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving settlement products.")
+
+# --- Root path ---
 @router.post("/", status_code=201) # Use root path with prefix, define response_model if desired
 async def add_new_settlement(
     settlement_data: SettlementCreate,
@@ -45,7 +89,7 @@ async def add_new_settlement(
         logger.error(f"Unexpected error in add_new_settlement for store {settlement_data.store_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error while adding settlement.")
 
-# --- GET Settlement by ID ---
+# --- Dynamic paths LAST ---
 @router.get("/{settlement_id}", response_model=SettlementResponse)
 async def get_settlement_details(
     settlement_id: int,
@@ -67,7 +111,6 @@ async def get_settlement_details(
         logger.error(f"Unexpected error getting settlement {settlement_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error retrieving settlement.")
 
-# --- UPDATE Settlement by ID ---
 @router.put("/{settlement_id}", response_model=SettlementResponse)
 async def update_existing_settlement(
     settlement_id: int,
@@ -95,24 +138,3 @@ async def update_existing_settlement(
     except Exception as e:
         logger.error(f"Unexpected error updating settlement {settlement_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error updating settlement.")
-
-@router.get("/records", response_model=List[SettlementRecord])
-async def get_settlement_records(
-    supabase: Client = Depends(get_supabase),
-    store_id: Optional[int] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None
-):
-    """
-    Retrieves all settlement records for a specific store.  
-    """
-    logger.info(f"API Call GET /api/settlement/records for store {store_id}, from {start_date} to {end_date}")
-    try:
-        records = await settlement_service.get_settlement_records(supabase, store_id, start_date, end_date)
-        return records
-    except HTTPException as e:  
-        logger.error(f"HTTPException in get_settlement_records for store {store_id}: {e.detail}")
-        raise e
-    except Exception as e:
-        logger.error(f"Unexpected error in get_settlement_records for store {store_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error retrieving settlement records.")     

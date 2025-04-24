@@ -178,7 +178,8 @@ async def get_inventory_records(
                 "trackingNo": shipment.get("tracking_no"),
                 "remarks": shipment.get("remarks"),
                 "createdBy": created_by,
-                "shipmentGroupId": str(shipment.get("shipment_group_id", shipment.get("shipment_id", "")))
+                "shipmentGroupId": str(shipment.get("shipment_group_id", shipment.get("shipment_id", ""))),
+                "is_sample": shipment.get("is_sample")
             })
 
         return records

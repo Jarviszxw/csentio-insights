@@ -48,10 +48,10 @@ interface SettlementItemDB {
   product_id: number;
   quantity: number;
   price: number; // Price from DB
-  products?: { // Nested product info
-    id: number;
-    name: string;
-    code: string;
+  products?: {
+    product_id: number; // Use product_id
+    sku_name: string;   // Use sku_name
+    sku_code: string;   // Use sku_code
   }
 }
 
@@ -157,20 +157,14 @@ export function EditSettlementDialog({
 
   // Recalculate total amount based on items (similar to add dialog)
    useEffect(() => {
-     // Only calculate if totalAmount wasn't manually set differently
-     // Or always calculate and make the input readOnly? Let's keep it editable for now.
      const calculatedTotal = items.reduce((sum, item) => {
        const quantity = item.quantity || 0;
        const price = item.unit_price || 0;
        return sum + (quantity * price);
      }, 0);
-     // Check if the current totalAmount (if a number) matches the calculated one
-     const currentTotalNum = typeof totalAmount === 'number' ? totalAmount : parseFloat(String(totalAmount));
-      // Update only if they differ significantly to avoid overriding user input immediately
-     if (Math.abs(currentTotalNum - calculatedTotal) > 0.001 || isNaN(currentTotalNum)) {
-       // setTotalAmount(calculatedTotal); // This overwrites manual input. Let's comment out for now.
-     }
-   }, [items]); // Dependency on items, maybe not on totalAmount state itself
+     // Always update the total amount based on items
+     setTotalAmount(calculatedTotal);
+   }, [items]); // Update whenever items change
 
   // --- Item Handlers ---
   const handleAddItem = () => {
@@ -273,10 +267,6 @@ export function EditSettlementDialog({
       >
         <DialogHeader>
           <DialogTitle>Edit Settlement Record</DialogTitle>
-           {/* Optional: Add description */}
-           <DialogDescription>
-             Modify the details of this settlement record.
-           </DialogDescription>
         </DialogHeader>
         {loading && !settlementData ? ( // Show loading indicator only when initially fetching data
              <div className="flex items-center justify-center p-10">Loading record details...</div>
@@ -337,104 +327,122 @@ export function EditSettlementDialog({
                </div>
              </div>
 
-             {/* Items Section */}
-             <div className="flex justify-between items-center mt-4 mb-2 border-b pb-2">
-               <Label className="text-base font-medium">Settlement Items</Label>
-               <Button variant="outline" size="sm" onClick={handleAddItem} disabled={products.length === 0}>
-                 <Plus className="h-4 w-4 mr-1" /> Add
-               </Button>
-             </div>
-
-             {/* Items List */}
-             <ScrollArea className="space-y-3 max-h-[200px] overflow-y-auto pr-2">
-               {items.map((item, index) => (
-                 <div key={item.item_id ?? `new-${index}`} className="flex items-center gap-2 mb-2">
-                   {/* Product Select */}
-                   <Select
-                     value={item.product_id ? String(item.product_id) : ''}
-                     onValueChange={(value) => handleItemChange(index, 'product_id', value)}
-                     // disabled={loadingProducts} // Need product loading state
-                   >
-                     <SelectTrigger className="flex-grow min-w-[150px] h-auto py-2 pl-3 pr-2 text-left min-h-12">
-                       <SelectValue placeholder={"Select product"}>
-                         {item.product_id
-                           ? products.find(p => p.id === item.product_id)?.name || 'Select product'
-                           : "Select product"}
-                       </SelectValue>
-                     </SelectTrigger>
-                     <SelectContent>
-                       {products.map((product) => (
-                         <SelectItem key={product.id} value={String(product.id)}>
-                           <div>
-                             {product.name}
-                             <div className="text-xs text-muted-foreground">{product.code}</div>
-                           </div>
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                    {/* Unit Price Input */}
-                   <div className="relative w-24">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">
-                        ¥
-                      </span>
-                     <Input
-                       id={`edit_unit_price_${index}`}
-                       type="number"
-                       step="1"
-                       min="0"
-                       placeholder="Price"
-                       value={item.unit_price ?? ''}
-                       onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
-                       className="pl-6 text-sm" // Adjust padding/size
-                     />
-                   </div>
-                    {/* Quantity Input */}
-                   <Input
-                     id={`edit_quantity_${index}`}
-                     type="number"
-                     min="1"
-                     placeholder="Qty"
-                     value={item.quantity || ''}
-                     onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                     className="w-16 text-center text-sm"
-                   />
-                   {/* Remove Button */}
-                   <Button
-                     variant="ghost"
-                     size="icon"
-                     onClick={() => handleRemoveItem(index)}
-                     className="text-muted-foreground hover:text-destructive h-8 w-8"
-                     aria-label="Remove Item"
-                    >
-                     <Trash2 className="h-4 w-4" />
+             {/* --- Settlement Items Section --- */}
+             <div className="mt-4">
+               <div className="flex items-center justify-between mb-2">
+                 <Label className="text-base font-medium">Settlement Items</Label>
+                 {/* Adjust layout for proper label alignment */}
+                 <div className="flex items-center gap-1">
+                    {/* Div to hold labels, aligned with inputs below */}
+                    <div className="flex items-center justify-end gap-8.5 text-sm font-medium text-muted-foreground mr-1" style={{ width: 'calc(theme(spacing.24) + theme(spacing.16) + theme(spacing.2))' }}> {/* Match input widths (w-24 + w-16 + gap-2) roughly */}
+                      <span className="w-22 text-right">Unit Price</span>
+                      <span className="w-1 text-right">Qty</span>
+                    </div>
+                    {/* Placeholder for delete button width */}
+                    <div className="w-[calc(theme(spacing.8)+theme(spacing.2))]"></div> {/* Approx width of Trash icon button */}
+                   <Button variant="outline" size="sm" onClick={handleAddItem} disabled={loading || products.length === 0}>
+                     <Plus className="h-4 w-4" />
+                     Add
                    </Button>
                  </div>
-               ))}
-               {items.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-2">Click '+ Add' to add settlement items.</p>
-               )}
-             </ScrollArea>
+               </div>
+               {/* Use max-h and overflow-auto like Add Dialog */}
+               <div className="space-y-3 max-h-[200px] overflow-y-auto pr-3"> {/* Match Add Form's height/scroll behavior */}
+                  {items.map((item, index) => (
+                     <div key={item.item_id ?? `new-${index}`} className="flex items-center gap-2"> {/* Use item_id or index for key */}
+                       {/* Product Select - Apply Add Form Styles */}
+                       <Select
+                         value={item.product_id ? String(item.product_id) : ''}
+                         onValueChange={(value) => handleItemChange(index, 'product_id', value)}
+                       >
+                         <SelectTrigger className="flex-grow max-w-[400px] h-auto py-2 pl-3 pr-2 text-left min-h-12"> {/* Match Add Form */}
+                           <SelectValue placeholder={"Select product"}>
+                             {item.product_id ? (
+                               (() => {
+                                 const product = products.find(p => p.id === item.product_id);
+                                 return product ? (
+                                   <div className="flex flex-col items-start">
+                                     <span className="text-sm truncate">{product.name}</span>
+                                     <span className="text-xs text-muted-foreground text-left">{product.code}</span>
+                                   </div>
+                                 ) : 'Select product';
+                               })()
+                             ) : (
+                               // loadingProducts ? "Loading..." : "Select product"
+                                "Select product"
+                             )}
+                           </SelectValue>
+                         </SelectTrigger>
+                         <SelectContent>
+                           {/* {productsError && <p className="text-red-500 text-xs p-2">{productsError}</p>} */}
+                           {products.map((product) => (
+                             <SelectItem key={product.id} value={String(product.id)}>
+                               <div>
+                                 {product.name}
+                                 <div className="text-xs text-muted-foreground">{product.code}</div>
+                               </div>
+                             </SelectItem>
+                           ))}
+                         </SelectContent>
+                       </Select>
+                       {/* Unit Price Input - Apply Add Form Styles */}
+                       <div className="relative w-24"> {/* Match Add Form (w-24) */}
+                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs"> {/* Adjusted padding for consistency */}
+                           ¥
+                         </span>
+                         <Input
+                           id={`edit_unit_price_${index}`}
+                           type="number"
+                           step="1"
+                           min="0"
+                           placeholder="Price"
+                           value={item.unit_price ?? ''}
+                           onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
+                           className="text-center pl-6 min-h-12" // Match Add Form (pl-6, min-h-12)
+                         />
+                       </div>
+                       {/* Quantity Input - Apply Add Form Styles */}
+                       <Input
+                         id={`edit_quantity_${index}`}
+                         type="number"
+                         min="1"
+                         placeholder="Qty"
+                         value={item.quantity || ''}
+                         onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                         className="w-16 min-h-12 text-center" // Match Add Form (min-h-12)
+                       />
+                       {/* Remove Button - Styles should already match */}
+                       <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-muted-foreground hover:text-destructive">
+                         <Trash2 className="h-4 w-4" />
+                         <span className="sr-only">Remove Item</span>
+                       </Button>
+                     </div>
+                   ))}
+                   {items.length === 0 && (
+                     <p className="text-sm text-muted-foreground text-center py-2">Click ' + Add ' to add settlement items.</p>
+                   )}
+               </div> {/* Closing div for list container */}
+             </div> {/* Closing div for item section */}
 
-              {/* Total Amount */}
-              <div className="space-y-2 mt-4">
-                <Label htmlFor="total_amount_edit">Total Amount</Label>
-                <div className="relative w-[120px]">
-                   <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
-                     ¥
-                   </span>
-                  <Input
-                    id="total_amount_edit"
-                    type="number"
-                    step="0.01" // Allow decimals for total amount
-                    min="0"
-                    placeholder="0.00"
-                    className="pl-7 w-[120px]"
-                    value={totalAmount}
-                    onChange={(e) => setTotalAmount(e.target.value ? e.target.value : '')} // Update string state
-                  />
-                </div>
-              </div>
+             {/* Total Amount */}
+             <div className="space-y-2 mt-4">
+               <Label htmlFor="total_amount_edit">Total Amount</Label>
+               <div className="relative w-[120px]">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+                    ¥
+                  </span>
+                 <Input
+                   id="total_amount_edit"
+                   type="number"
+                   step="1" 
+                   min="0"
+                   placeholder="0.00"
+                   className="pl-7 w-[120px]"
+                   value={totalAmount}
+                   onChange={(e) => setTotalAmount(e.target.value ? e.target.value : '')} // Update string state
+                 />
+               </div>
+             </div>
 
              {/* Remarks */}
              <div className="space-y-2 mt-4">

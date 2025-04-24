@@ -670,9 +670,9 @@ export interface SettlementItem {
   quantity: number;
   price: number;
   products?: {
-    id: number;
-    name: string;
-    code: string;
+    product_id: number;
+    sku_name: string;
+    sku_code: string;
   }
 }
 
@@ -691,18 +691,31 @@ export async function fetchSettlementRecords(storeId?: string, startDate?: Date,
     const url = `${API_BASE_URL}/settlement/records${params.toString() ? '?' + params.toString() : ''}`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
-      signal: controller.signal // 关联 AbortController
+      signal: controller.signal
     });
 
-    clearTimeout(timeoutId); // 清除超时
+    clearTimeout(timeoutId);
 
     if (!response.ok) throw new Error(`API request failed fetching records: ${response.status}`);
-    return response.json();
+    
+    const data = await response.json();
+    
+    // 格式化返回的数据，确保字段符合前端期望
+    return data.map((record: any) => ({
+      id: `STL-${record.settlement_id}`,
+      settle_date: record.settle_date,
+      store: record.store,
+      store_id: record.store_id,
+      total_amount: record.total_amount,
+      remarks: record.remarks,
+      created_by: record.created_by,
+      items: record.items || []
+    }));
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       console.error('Error fetching settlement records: Request timed out');

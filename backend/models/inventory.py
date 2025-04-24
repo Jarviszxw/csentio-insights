@@ -27,6 +27,7 @@ class InventoryRecord(BaseModel):
     remarks: Optional[str]
     createdBy: str
     shipmentGroupId: str
+    is_sample: bool
 
     class Config:
         from_attributes = True
