@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useStoreView } from "./store-context";
@@ -160,15 +159,13 @@ export function StoreMapWrapper({ className, refreshTrigger = 0 }: StoreMapWrapp
   };
 
   return (
-    <Card className={cn("w-full h-[500px]", className)}>
-      <CardContent className="h-full p-0 pt-2 overflow-hidden">
-        <MapComponents 
-          center={center as [number, number]} 
-          stores={stores} 
-          onSelectStore={handleSelectStore}
-          height="100%"
-        />
-      </CardContent>
-    </Card>
+    <div className={cn("w-full h-[500px]", className)}>
+      <MapComponents 
+        center={center as [number, number]} 
+        stores={stores} 
+        onSelectStore={handleSelectStore}
+        height="100%"
+      />
+    </div>
   );
 }

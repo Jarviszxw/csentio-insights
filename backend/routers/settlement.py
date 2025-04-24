@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from typing import List, Optional   
+from datetime import date
 from supabase import Client
 from db.database import get_supabase
 # Use direct imports when running from project root with uvicorn
-from models.settlement import SettlementCreate, SettlementItemCreate, SettlementUpdate, SettlementResponse
+from models.settlement import SettlementCreate, SettlementItemCreate, SettlementUpdate, SettlementResponse, SettlementRecord
 from services import settlement_service
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/settlements", tags=["settlements"])
+router = APIRouter(prefix="/api/settlement", tags=["settlement"])
 
 # Define the Settlement response model if needed, maybe excluding items or formatting differently
 # class SettlementResponse(BaseModel): ...
@@ -31,7 +32,7 @@ async def add_new_settlement(
         - **quantity**: Quantity of the product.
         - **unit_price**: Unit price used for this settlement item.
     """
-    logger.info(f"API Call POST /api/settlements: Received payload for store {settlement_data.store_id} on {settlement_data.settle_date}")
+    logger.info(f"API Call POST /api/settlement: Received payload for store {settlement_data.store_id} on {settlement_data.settle_date}")
     try:
         created_settlement = await settlement_service.create_settlement(supabase, settlement_data)
         logger.info(f"Successfully created settlement ID: {created_settlement.get('settlement_id')}")
@@ -53,7 +54,7 @@ async def get_settlement_details(
     """
     Retrieves the details of a specific settlement, including its items and product info.
     """
-    logger.info(f"API Call GET /api/settlements/{settlement_id}")
+    logger.info(f"API Call GET /api/settlement/{settlement_id}")
     try:
         settlement = await settlement_service.get_settlement_by_id(supabase, settlement_id)
         if not settlement:
@@ -77,7 +78,7 @@ async def update_existing_settlement(
     Updates an existing settlement record and its items.
     - Handles adding new items, updating existing items, and deleting removed items.
     """
-    logger.info(f"API Call PUT /api/settlements/{settlement_id}")
+    logger.info(f"API Call PUT /api/settlement/{settlement_id}")
     try:
         updated_settlement = await settlement_service.update_settlement(
             supabase, 
@@ -95,17 +96,23 @@ async def update_existing_settlement(
         logger.error(f"Unexpected error updating settlement {settlement_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error updating settlement.")
 
-# Example Pydantic models directly in router if not in separate file:
-# from pydantic import BaseModel, Field
-
-# class SettlementItemCreate(BaseModel):
-#     product_id: int
-#     quantity: int = Field(..., gt=0)
-#     unit_price: float = Field(..., ge=0) # Ensure price is non-negative
-
-# class SettlementCreate(BaseModel):
-#     settle_date: date
-#     store_id: int
-#     total_amount: float = Field(..., ge=0) # Ensure total amount is non-negative
-#     remarks: Optional[str] = None
-#     items: List[SettlementItemCreate] = Field(..., min_items=1) # Ensure at least one item 
+@router.get("/records", response_model=List[SettlementRecord])
+async def get_settlement_records(
+    supabase: Client = Depends(get_supabase),
+    store_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+):
+    """
+    Retrieves all settlement records for a specific store.  
+    """
+    logger.info(f"API Call GET /api/settlement/records for store {store_id}, from {start_date} to {end_date}")
+    try:
+        records = await settlement_service.get_settlement_records(supabase, store_id, start_date, end_date)
+        return records
+    except HTTPException as e:  
+        logger.error(f"HTTPException in get_settlement_records for store {store_id}: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error in get_settlement_records for store {store_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving settlement records.")     

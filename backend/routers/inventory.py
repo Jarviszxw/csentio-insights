@@ -22,7 +22,7 @@ async def get_inventory_statistics(
         logger.error(f"Failed to get inventory statistics: {str(e)}")
         return {
             "sample": {"totalQuantity": 0, "skuDetails": []},
-            "inventory": {"totalQuantity": 0, "skuDetails": []},
+            "stock": {"totalQuantity": 0, "skuDetails": []},
             "error": str(e)
         }
 

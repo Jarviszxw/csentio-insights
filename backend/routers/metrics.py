@@ -215,9 +215,14 @@ async def get_gmv_by_dimension(
     dimension: str = "store",  # store, product, city
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    limit: int = 6
+    limit: Optional[int] = None
 ):
-    logger.info(f"API Call /api/metrics/gmv-by-dimension: Get GMV by {dimension} from {start_date} to {end_date}")
+    logger.info(f"API Call /api/metrics/gmv-by-dimension: Get GMV by {dimension} from {start_date} to {end_date}, limit={limit}")
+    
+    # Ensure limit is an integer with a default value before passing to service or using in mock data
+    effective_limit = limit if limit is not None and limit > 0 else 6 
+    logger.info(f"Using effective limit: {effective_limit}")
+    
     try:
         # 验证维度参数
         valid_dimensions = ["store", "product", "city"]
@@ -240,24 +245,27 @@ async def get_gmv_by_dimension(
             
         logger.info(f"Using date range: {start_date} to {end_date}")
         
-        # 处理不同维度的数据
+        # 处理不同维度的数据 - Pass effective_limit
         if dimension == "store":
-            return await metrics_service.get_gmv_by_store(supabase, start_date, end_date, limit)
+            return await metrics_service.get_gmv_by_store(supabase, start_date, end_date, effective_limit)
         elif dimension == "product":
-            return await metrics_service.get_gmv_by_product(supabase, start_date, end_date, limit)
+            return await metrics_service.get_gmv_by_product(supabase, start_date, end_date, effective_limit)
         elif dimension == "city":
-            return await metrics_service.get_gmv_by_city(supabase, start_date, end_date, limit)
+            return await metrics_service.get_gmv_by_city(supabase, start_date, end_date, effective_limit)
         
     except Exception as e:
-        
-        logger.error(f"Failed to get GMV by {dimension}: {str(e)}")
-        # 返回模拟数据作为备用
+        # Log the original exception trace
+        logger.error(f"Failed to get GMV by {dimension}: {str(e)}", exc_info=True) 
+        # 返回模拟数据作为备用 - Use effective_limit
         dimension_key = {"store": "store", "product": "product", "city": "city"}[dimension]
         mock_data = []
-        for i in range(limit):
+        # Use effective_limit for mock data generation
+        for i in range(effective_limit): 
             mock_data.append({
                 dimension_key: f"{dimension_key.capitalize()} {chr(65 + i)}",
-                "gmv": 100 * (limit - i),
+                "gmv": 100 * (effective_limit - i),
                 "trend": ((-1) ** i) * (i + 1) * 1.5
             })
+        # Also log that mock data is being returned
+        logger.warning(f"Returning mock data for GMV by {dimension} due to error.")
         return mock_data

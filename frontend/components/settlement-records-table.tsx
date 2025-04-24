@@ -46,6 +46,11 @@ import {
 } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EditSettlementDialog, SettlementUpdatePayload } from "./edit-settlement-dialog";
+import { Skeleton } from "./ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { fetchSettlementRecords } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/api";
+import { Separator } from "@/components/ui/separator";
 
 interface SettlementRecord {
   id: string;
@@ -56,6 +61,7 @@ interface SettlementRecord {
   remarks?: string;
   created_by: string;
   items?: SettlementItemDB[];
+  settle_date_obj?: Date;
 }
 
 interface SettlementItemForm {
@@ -101,21 +107,20 @@ interface SettlementUpdate {
   remarks: string;
 }
 
-const mockRecords: SettlementRecord[] = [
-  { id: "STL-001", settle_date: "2023-06-25", store: "Store A", store_id: 1, total_amount: 120.00, remarks: "Weekly settlement", created_by: "David Lee" },
-  { id: "STL-002", settle_date: "2023-06-22", store: "Store B", store_id: 2, total_amount: 100.00, remarks: "-", created_by: "Charlie Brown" },
-  { id: "STL-003", settle_date: "2023-06-20", store: "Store C", store_id: 3, total_amount: 150.00, remarks: "End of season", created_by: "Bob Wilson" },
-  { id: "STL-004", settle_date: "2023-06-18", store: "Store A", store_id: 1, total_amount: 80.00, remarks: "", created_by: "Alice Johnson" },
-  { id: "STL-005", settle_date: "2023-06-16", store: "Store B", store_id: 2, total_amount: 120.00, remarks: "Special promotion", created_by: "Jane Smith" }
-];
-
 export function SettlementRecordsTable() {
   const { dateRange } = useDateRange();
   const { viewMode, storeId, stores, loadingStores } = useSettlementView();
-  const [records, setRecords] = React.useState<SettlementRecord[]>(mockRecords);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [selectedRecord, setSelectedRecord] = React.useState<SettlementRecord | null>(null);
+  const { data: records = [], isLoading: recordsLoading, refetch: refetchRecords } = useQuery<SettlementRecord[]>({
+    queryKey: ['settlementRecords', storeId],
+    queryFn: () => fetchSettlementRecords(storeId),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 30, // 30 minutes
+    retry: 1,
+    retryDelay: 1000,
+  });
 
   const [products, setProducts] = React.useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = React.useState(true);
@@ -123,7 +128,7 @@ export function SettlementRecordsTable() {
 
   const [settlementItems, setSettlementItems] = React.useState<SettlementItemForm[]>([{ product_id: undefined, quantity: 1, unit_price: 0 }]);
 
-  const [newRecord, setNewRecord] = React.useState<Partial<SettlementRecord & { settle_date_obj?: Date }>>({
+  const [newRecord, setNewRecord] = React.useState<Partial<SettlementRecord>>({
     settle_date_obj: new Date(),
     total_amount: 0,
     store_id: undefined,
@@ -251,15 +256,22 @@ export function SettlementRecordsTable() {
       try {
         setLoadingProducts(true);
         setProductsError(null);
-        const response = await fetch('http://localhost:8000/api/info/products'); 
+        const response = await fetch(`${API_BASE_URL}/info/products`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        }); 
         if (!response.ok) {
           let errorMsg = 'Failed to fetch products';
-           try {
-             const errorData = await response.json();
-             errorMsg = `Failed to fetch products: ${response.status} ${response.statusText} - ${errorData.detail || JSON.stringify(errorData)}`;
-           } catch (jsonError) {
-             errorMsg = `Failed to fetch products: ${response.status} ${response.statusText}`;
-           }
+          try {
+            const errorData = await response.json();
+            errorMsg = `Failed to fetch products: ${response.status} ${response.statusText} - ${errorData.detail || JSON.stringify(errorData)}`;
+          } catch (jsonError) {
+            errorMsg = `Failed to fetch products: ${response.status} ${response.statusText}`;
+          }
           throw new Error(errorMsg);
         }
         const data: Product[] = await response.json();
@@ -406,19 +418,8 @@ export function SettlementRecordsTable() {
              }
              const savedRecord: SettlementResponse = await response.json();
              console.log("Successfully updated:", savedRecord);
-             setRecords(prev => prev.map(r => 
-                 String(r.id).replace('STL-', '') === String(savedRecord.settlement_id) 
-                 ? {
-                      id: `STL-${savedRecord.settlement_id}`, 
-                      settle_date: savedRecord.settle_date.toString(), 
-                      store: stores.find(s => s.store_id === savedRecord.store_id)?.store_name || `Store ${savedRecord.store_id}`, 
-                      store_id: savedRecord.store_id,
-                      total_amount: savedRecord.total_amount,
-                      remarks: savedRecord.remarks || '-',
-                      created_by: String(savedRecord.created_by),
-                      items: savedRecord.items
-                 } : r
-             ));
+             
+             await refetchRecords();
              setIsEditDialogOpen(false);
         } catch (error) {
              console.error("Failed to update settlement:", error);
@@ -444,7 +445,7 @@ export function SettlementRecordsTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Settle Date</TableHead>
+              <TableHead>Date</TableHead>
               <TableHead>Store</TableHead>
               <TableHead>Total Amount</TableHead>
               <TableHead>Remarks</TableHead>
@@ -453,18 +454,40 @@ export function SettlementRecordsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {currentRecords.map((record) => (
-              <TableRow key={record.id}>
-                <TableCell>{record.settle_date}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{record.store}</Badge>
+            {recordsLoading ? (
+              Array.from({ length: itemsPerPage }).map((_, index) => (
+                <TableRow key={`loading-${index}`}>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-10 w-32" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-5 w-8 inline-block" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                  <TableCell className="text-right">
+                    <Skeleton className="h-8 w-8 inline-block" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : records.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                  No settlement records found. Click "Add" to create a new record.
                 </TableCell>
-                <TableCell>{formatCurrency(record.total_amount || 0)}</TableCell>
-                <TableCell>{record.remarks || "-"}</TableCell>
-                <TableCell>{record.created_by}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end space-x-1">
-                     <Button
+              </TableRow>
+            ) : (
+              records.map((record) => (
+                <TableRow key={record.id}>
+                  <TableCell>{record.settle_date}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{record.store}</Badge>
+                  </TableCell>
+                  <TableCell>{formatCurrency(record.total_amount || 0)}</TableCell>
+                  <TableCell>{record.remarks || "-"}</TableCell>
+                  <TableCell>{record.created_by}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end space-x-1">
+                      <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleViewItems(record)}
@@ -483,13 +506,14 @@ export function SettlementRecordsTable() {
                       >
                         <PenSquare className="h-4 w-4" />
                       </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
-        
+
         {totalPages > 1 && (
           <div className="flex justify-end mt-4">
             <Pagination>
@@ -573,10 +597,8 @@ export function SettlementRecordsTable() {
                        onClick={() => setIsDatePickerOpen(true)}
                      >
                        <CalendarIcon className="mr-2 h-4 w-4" />
-                       {newRecord.settle_date_obj ? (
-                         format(newRecord.settle_date_obj, "LLL d, y")
-                       ) : (
-                         <span>Pick a date</span>
+                       {newRecord.settle_date_obj && (
+                         format(new Date(newRecord.settle_date_obj), "LLL d, y")
                        )}
                      </Button>
                    </PopoverTrigger>
@@ -614,23 +636,45 @@ export function SettlementRecordsTable() {
                </div>
              </div>
 
-             <div className="flex items-center gap-4 mt-4 mb-2">
-               <Label>Settlement Items</Label>
-               <Button variant="outline" size="sm" onClick={handleAddItem} disabled={loadingProducts}>
-                 <Plus className="h-4 w-4 mr-1" />
-                 Add
-               </Button>
+             {/* --- Start: Modified Header Row for Items --- */}
+             {/* Place Title, Labels, and Button on the same row. Restore mb-2 */}
+             <div className="flex items-center justify-between mt-2">
+               <Label className="text-base font-medium">Settlement Items</Label>
+               {/* Group Labels and Button */}
+               <div className="flex items-center gap-1">
+                 {/* Labels Container */}
+                 <div className="flex items-center gap-3">
+                   {/* Unit Price Label: Positioned using fixed width and text-right */}
+                   <div className="w-22 text-right">
+                     <Label className="text-sm text-muted-foreground">Unit Price</Label>
+                   </div>
+                   {/* Qty Label: Positioned using fixed width and text-right */}
+                   <div className="w-0 text-right">
+                     <Label className="text-sm text-muted-foreground">Qty</Label>
+                   </div>
+                   {/* Spacer to account for Delete Button width (approx w-8 for icon + gap-2) */}
+                   <div className="w-[calc(theme(spacing.8)+theme(spacing.2))]"></div>
+                 </div>
+                 {/* Add Button */}
+                 <Button variant="outline" size="sm" onClick={handleAddItem} disabled={loadingProducts}>
+                   <Plus className="h-4 w-4" />
+                   Add
+                 </Button>
+               </div>
              </div>
-
+             {/* --- End: Modified Header Row for Items --- */}
+             {/* Item list - Restore space-y-3 */}
              <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2">
                {settlementItems.map((item, index) => (
                  <div key={index} className="flex items-center gap-2">
+                   {/* Product Select (Keep flex-grow) */}
                    <Select
                      value={item.product_id ? String(item.product_id) : ''}
                      onValueChange={(value) => handleItemChange(index, 'product_id', value)}
                      disabled={loadingProducts}
                    >
-                     <SelectTrigger className="flex-grow min-w-[150px] h-auto py-2 pl-3 pr-2 text-left min-h-12">
+                     {/* Keep SelectTrigger and SelectContent as they are */}
+                     <SelectTrigger className="flex-grow max-w-[400px] h-auto py-2 pl-3 pr-2 text-left min-h-12"> {/* Ensure min-h-10 for consistency */}
                        <SelectValue placeholder={loadingProducts ? "Loading..." : "Select product"}>
                          {item.product_id ? (
                            (() => {
@@ -659,28 +703,31 @@ export function SettlementRecordsTable() {
                        ))}
                      </SelectContent>
                    </Select>
+                   {/* Unit Price Input (Keep w-24) */}
                    <div className="relative w-24">
-                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground text-xs">
                        ¥
                      </span>
-                     <Input 
+                     <Input
                        id={`unit_price_${index}`}
                        type="number"
                        step="1"
                        min="0"
-                       placeholder="Unit Price"
-                       value={item.unit_price ?? ''} 
+                       placeholder="Price"
+                       value={item.unit_price ?? ''}
                        onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)}
-                       className="pl-7" 
+                       className="text-center pl-6 min-h-12" 
                      />
                    </div>
-                   <Input 
+                   {/* Quantity Input (Keep w-16) */}
+                   <Input
+                     id={`quantity_${index}`} /* Add id for consistency */
                      type="number"
                      min="1"
                      placeholder="Qty"
                      value={item.quantity || ''}
                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                     className="w-16 text-center"
+                     className="w-16 min-h-12 text-center" 
                    />
                    <Button variant="ghost" size="icon" onClick={() => handleRemoveItem(index)} className="text-muted-foreground hover:text-destructive">
                      <Trash2 className="h-4 w-4" />
@@ -693,7 +740,7 @@ export function SettlementRecordsTable() {
                )}
              </div>
 
-             <div className="space-y-2 mt-4">
+             <div className="space-y-2 mt-2">
                <Label htmlFor="total_amount">Total Amount</Label> 
                <div className="relative w-[120px]">
                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
@@ -705,7 +752,7 @@ export function SettlementRecordsTable() {
                    step="1"
                    min="0"
                    placeholder="0"
-                   className="pl-7 w-[120px]" 
+                   className="w-[120px] min-h-10 text-center" 
                    value={newRecord.total_amount ?? ''} 
                    onChange={(e) => setNewRecord({...newRecord, total_amount: e.target.value ? Number(e.target.value) : undefined})}
                  />

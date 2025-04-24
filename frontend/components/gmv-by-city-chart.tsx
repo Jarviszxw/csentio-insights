@@ -30,19 +30,10 @@ interface ChartData {
 }
 
 interface GMVByCityChartProps {
-  externalData?: DimensionDataItem[];
+  chartData: DimensionDataItem[];
+  isLoading: boolean;
   skipLoading?: boolean;
 }
-
-// Default data for when API requests fail
-const defaultChartData: ChartData[] = [
-  { city: "New York", gmv: 490, trend: 2.2 },
-  { city: "London", gmv: 430, trend: -1.5 },
-  { city: "Tokyo", gmv: 380, trend: 0.8 },
-  { city: "Berlin", gmv: 340, trend: -0.5 },
-  { city: "Paris", gmv: 280, trend: 1.3 },
-  { city: "Sydney", gmv: 240, trend: -1.9 },
-];
 
 const chartConfig = {
   gmv: {
@@ -54,69 +45,24 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function GMVByCityChart({ externalData, skipLoading = false }: GMVByCityChartProps) {
+export function GMVByCityChart({ chartData: rawData, isLoading, skipLoading = false }: GMVByCityChartProps) {
   const { dateRange } = useDateRange();
-  const [chartData, setChartData] = React.useState<ChartData[]>(defaultChartData);
-  const [isLoading, setIsLoading] = React.useState(false);
 
-  // 使用外部数据，如果提供的话
-  React.useEffect(() => {
-    if (externalData && externalData.length > 0) {
-      const mappedData: ChartData[] = externalData.map(item => ({
-        city: item.city || String(item.name) || 'Unknown',
-        gmv: Number(item.gmv) || 0,
-        trend: typeof item.trend === 'number' ? item.trend : 0
-      }));
-      setChartData(mappedData);
-    }
-  }, [externalData]);
+  const chartData: ChartData[] = React.useMemo(() => {
+    if (!rawData) return [];
+    return rawData.map(item => ({
+      city: item.city || String(item.name) || 'Unknown',
+      gmv: Number(item.gmv) || 0,
+      trend: typeof item.trend === 'number' ? item.trend : 0
+    }));
+  }, [rawData]);
 
-  // 仅在没有外部数据时获取数据
-  React.useEffect(() => {
-    if (skipLoading || externalData) {
-      return;
-    }
-    
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const from = dateRange?.from ?? undefined;
-        const to = dateRange?.to ?? undefined;
-        
-        console.log("GMVByCityChart: 获取城市GMV数据，日期范围:", { from, to });
-        const data = await fetchGMVByDimension('city', from, to, 6);
-        
-        if (data && data.length > 0) {
-          // Map API response data to component format
-          const mappedData: ChartData[] = data.map(item => ({
-            city: item.city || String(item.name) || 'Unknown',
-            gmv: Number(item.gmv) || 0,
-            trend: typeof item.trend === 'number' ? item.trend : 0
-          }));
-          setChartData(mappedData);
-        } else {
-          console.warn("没有获取到城市GMV数据，使用默认数据");
-          setChartData(defaultChartData);
-        }
-      } catch (error) {
-        console.error("获取城市GMV数据失败:", error);
-        setChartData(defaultChartData);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [dateRange, skipLoading, externalData]);
-
-  // 环比趋势格式化
   const formatTrend = (value: number) => {
     if (typeof value !== 'number') return '';
     return value > 0 ? `+${value.toFixed(1)}%` : `${value.toFixed(1)}%`;
   };
 
-  // 本地loading状态，在skipLoading为true时忽略
-  const showLoading = !skipLoading && isLoading;
+  const showLoading = isLoading;
 
   return (
     <Card className="bg-white dark:bg-black">
@@ -132,7 +78,7 @@ export function GMVByCityChart({ externalData, skipLoading = false }: GMVByCityC
                     <>{format(dateRange.from, "MMM yyyy")} - {format(dateRange.to, "MMM yyyy")}</>
                   )
                 ) : (
-                  <>{format(new Date(), "MMM yyyy")}</>
+                  <>{/* Fallback */}</>
                 )}
         </CardDescription>
       </CardHeader>
@@ -160,7 +106,7 @@ export function GMVByCityChart({ externalData, skipLoading = false }: GMVByCityC
                 tickLine={false}
                 tickMargin={10}
                 axisLine={false}
-                tickFormatter={(value) => value.slice(0, 6)}
+                tickFormatter={(value) => String(value).slice(0, 6)}
                 hide
               />
               <XAxis dataKey="gmv" type="number" hide />
@@ -169,13 +115,13 @@ export function GMVByCityChart({ externalData, skipLoading = false }: GMVByCityC
                 content={<ChartTooltipContent 
                   indicator="line" 
                   formatter={(value, name, props) => {
-                    return [`$${value.toLocaleString()}`, "GMV"];
+                    const numValue = Number(value);
+                    return !isNaN(numValue) ? [`¥${numValue.toLocaleString()}`, "GMV"] : ["Invalid Data", "GMV"];
                 }}
                 />}
               />
               <Bar
                 dataKey="gmv"
-
                 layout="vertical"
                 fill="var(--color-gmv)"
                 radius={4}

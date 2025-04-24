@@ -49,10 +49,22 @@ export interface DimensionDataItem {
  * 格式化日期为ISO格式的日期字符串 (YYYY-MM-DD)，避免时区问题
  */
 function formatDateToISOString(date: Date): string {
+  // return date.toISOString().split('T')[0]; // 可能受时区影响
+
+  // 手动构建 YYYY-MM-DD 格式，避免时区转换问题
   const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 月份从0开始，需要+1
   const day = date.getDate().toString().padStart(2, '0');
+  
   return `${year}-${month}-${day}`;
+}
+
+function getMonthRange(date: Date): { start: Date; end: Date } {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const start = new Date(year, month, 1); // 月初
+  const end = new Date(year, month + 1, 0); // 月末
+  return { start, end };
 }
 
 /**
@@ -68,29 +80,31 @@ export async function fetchTotalGMV(from?: Date, to?: Date): Promise<GMVResponse
     const params = new URLSearchParams();
 
     if (from) {
-      const firstDayOfMonth = new Date(from.getFullYear(), from.getMonth(), 1);
-      const formattedFromDate = formatDateToISOString(firstDayOfMonth);
+      const { start } = getMonthRange(from);
+      const formattedFromDate = formatDateToISOString(start);
       params.append('start_date', formattedFromDate);
-      console.log("API: 使用月初日期:", formattedFromDate, "原始日期对象:", from);
+      console.log("API: 使用月初日期:", formattedFromDate);
     }
 
     if (to) {
-      const lastDayOfMonth = new Date(to.getFullYear(), to.getMonth() + 1, 0);
-      const formattedToDate = formatDateToISOString(lastDayOfMonth);
+      const { end } = getMonthRange(to);
+      const formattedToDate = formatDateToISOString(end);
       params.append('end_date', formattedToDate);
-      console.log("API: 使用月末日期:", formattedToDate, "原始日期对象:", to);
+      console.log("API: 使用月末日期:", formattedToDate);
     }
 
     const url = `${API_BASE_URL}/metrics/total-gmv${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       },
       signal: controller.signal
     });
@@ -101,12 +115,15 @@ export async function fetchTotalGMV(from?: Date, to?: Date): Promise<GMVResponse
       throw new Error(`API request failed with status ${response.status}`);
     }
 
-    // 直接返回解析后的数据，TypeScript 应该能正确推断
     const data: GMVResponse = await response.json();
     console.log("API: 获取到GMV数据:", data);
     return data;
   } catch (error) {
-    console.error('API: 获取GMV数据失败:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('API: 获取GMV数据失败: Request timed out');
+    } else {
+      console.error('API: 获取GMV数据失败:', error);
+    }
     return {
       total_gmv: 0,
       pop_percentage: 0,
@@ -129,29 +146,31 @@ export async function fetchTotalSales(from?: Date, to?: Date): Promise<SalesResp
     const params = new URLSearchParams();
 
     if (from) {
-      const firstDayOfMonth = new Date(from.getFullYear(), from.getMonth(), 1);
-      const formattedFromDate = formatDateToISOString(firstDayOfMonth);
+      const { start } = getMonthRange(from);
+      const formattedFromDate = formatDateToISOString(start);
       params.append('start_date', formattedFromDate);
-      console.log("API: 使用月初日期:", formattedFromDate, "原始日期对象:", from);
+      console.log("API: 使用月初日期:", formattedFromDate);
     }
 
     if (to) {
-      const lastDayOfMonth = new Date(to.getFullYear(), to.getMonth() + 1, 0);
-      const formattedToDate = formatDateToISOString(lastDayOfMonth);
+      const { end } = getMonthRange(to);
+      const formattedToDate = formatDateToISOString(end);
       params.append('end_date', formattedToDate);
-      console.log("API: 使用月末日期:", formattedToDate, "原始日期对象:", to);
+      console.log("API: 使用月末日期:", formattedToDate);
     }
 
     const url = `${API_BASE_URL}/metrics/total-sales${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       },
       signal: controller.signal
     });
@@ -166,7 +185,11 @@ export async function fetchTotalSales(from?: Date, to?: Date): Promise<SalesResp
     console.log("API: 获取到总销售额数据:", data);
     return data;
   } catch (error) {
-    console.error('API: 获取总销售额数据失败:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('API: 获取总销售额数据失败: Request timed out');
+    } else {
+      console.error('API: 获取总销售额数据失败:', error);
+    }
     return {
       total_sales: 0,
       pop_percentage: 0,
@@ -204,7 +227,7 @@ export async function fetchMonthlyData(from?: Date, to?: Date): Promise<MonthlyD
     console.log("API: 请求URL:", url);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -263,7 +286,7 @@ export async function fetchTotalStores(from?: Date, to?: Date): Promise<StoresRe
     console.log("API: 请求URL:", url);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -335,7 +358,7 @@ export async function fetchGMVByDimension(
     console.log("API: 请求URL:", url);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       method: 'GET',
@@ -413,7 +436,7 @@ export interface InventoryStats {
 
 export interface InventoryStatisticsResponse {
   sample: InventoryStats;
-  inventory: InventoryStats;
+  stock: InventoryStats;
 }
 
 export interface DistributionItem {
@@ -432,6 +455,8 @@ export interface InventoryRecord {
   remarks?: string;
   createdBy: string;
   inventory_date: string;
+  type: 'stock' | 'sample';
+  is_sample?: boolean;
 }
 
 export interface Product {
@@ -447,15 +472,31 @@ export async function fetchInventoryStatistics(storeId?: string): Promise<Invent
       params.append('store_id', storeId);
     }
     const url = `${API_BASE_URL}/inventory/statistics${params.toString() ? '?' + params.toString() : ''}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
+      signal: controller.signal // 关联 AbortController
     });
+
+    clearTimeout(timeoutId); // 清除超时
+
     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-    return response.json();
+    const data = await response.json();
+    return data;
   } catch (error) {
-    console.error('Error fetching inventory statistics:', error);
-    return { sample: { totalQuantity: 0, skuDetails: [] }, inventory: { totalQuantity: 0, skuDetails: [] } };
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Error fetching inventory statistics: Request timed out');
+    } else {
+      console.error('Error fetching inventory statistics:', error);
+    }
+    return { 
+      sample: { totalQuantity: 0, skuDetails: [] }, 
+      stock: { totalQuantity: 0, skuDetails: [] } 
+    };
   }
 }
 
@@ -466,14 +507,26 @@ export async function fetchInventoryDistribution(storeId?: string): Promise<Dist
       params.append('store_id', storeId);
     }
     const url = `${API_BASE_URL}/inventory/distribution${params.toString() ? '?' + params.toString() : ''}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
+      signal: controller.signal // 关联 AbortController
     });
+
+    clearTimeout(timeoutId); // 清除超时
+
     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
     return response.json();
   } catch (error) {
-    console.error('Error fetching inventory distribution:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Error fetching inventory distribution: Request timed out');
+    } else {
+      console.error('Error fetching inventory distribution:', error);
+    }
     return [];
   }
 }
@@ -491,45 +544,171 @@ export async function fetchInventoryRecords(storeId?: string, startDate?: Date, 
       params.append('end_date', formatDateToISOString(endDate));
     }
     const url = `${API_BASE_URL}/inventory/records${params.toString() ? '?' + params.toString() : ''}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
+      signal: controller.signal // 关联 AbortController
     });
-    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-    return response.json();
+
+    clearTimeout(timeoutId); // 清除超时
+
+    if (!response.ok) throw new Error(`API request failed fetching records: ${response.status}`);
+    const data = await response.json();
+
+    return data.map((record: any) => ({
+      ...record,
+      type: record.is_sample === true ? 'sample' : 'inventory',
+    }));
   } catch (error) {
-    console.error('Error fetching inventory records:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Error fetching inventory records: Request timed out');
+    } else {
+      console.error('Error fetching inventory records:', error);
+    }
     return [];
   }
 }
 
-export async function addInventoryRecords(records: Omit<InventoryRecord, 'id' | 'createTime'>[]): Promise<void> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/inventory/records`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(records),
-    });
-    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-  } catch (error) {
-    console.error('Error adding inventory records:', error);
-    throw error;
-  }
+export async function addInventoryRecords(records: Omit<InventoryRecord, 'id' | 'createTime' | 'is_sample'>[]): Promise<void> {
+  console.log("API: Adding inventory records (frontend format):", records);
+  const recordsToSend = records.map(record => {
+    const { type, ...rest } = record;
+    return {
+      ...rest,
+      is_sample: type === 'sample'
+    };
+  });
+  console.log("API: Sending inventory records (backend format):", recordsToSend);
+  const response = await fetch(`${API_BASE_URL}/inventory/records`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(recordsToSend),
+  });
+  if (!response.ok) throw new Error(`API request failed adding records: ${response.status}`);
 }
 
 export async function fetchProducts(): Promise<Product[]> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+
     const response = await fetch(`${API_BASE_URL}/info/products`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
+      signal: controller.signal // 关联 AbortController
     });
+
+    clearTimeout(timeoutId); // 清除超时
+
     if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
     return response.json();
   } catch (error) {
-    console.error('Error fetching products:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Error fetching products: Request timed out');
+    } else {
+      console.error('Error fetching products:', error);
+    }
+    return [];
+  }
+}
+
+export async function updateInventoryRecord(recordId: string, recordData: Partial<Omit<InventoryRecord, 'id' | 'createTime' | 'is_sample'>>): Promise<InventoryRecord> {
+  console.log(`API: Updating inventory record ${recordId} (frontend format):`, recordData);
+  const { type, ...rest } = recordData;
+  const dataToSend: Record<string, any> = { ...rest };
+  if (type !== undefined) {
+      dataToSend.is_sample = type === 'sample';
+  }
+  if (dataToSend.inventory_date instanceof Date) {
+    dataToSend.inventory_date = formatDateToISOString(dataToSend.inventory_date);
+  }
+
+  console.log(`API: Sending update for record ${recordId} (backend format):`, dataToSend);
+  const response = await fetch(`${API_BASE_URL}/inventory/records/${recordId}`, {
+      method: 'PATCH',
+      headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+      },
+      body: JSON.stringify(dataToSend),
+  });
+
+  if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('API Error Body:', errorBody);
+      throw new Error(`API request failed updating record ${recordId}: ${response.status}`);
+  }
+  const updatedRecord = await response.json();
+  return {
+      ...updatedRecord,
+      type: updatedRecord.is_sample === true ? 'sample' : 'inventory',
+  };
+}
+
+export interface SettlementRecord {
+  id: string;
+  settle_date: string;
+  store: string;
+  store_id?: number;
+  total_amount?: number;
+  remarks?: string;
+  created_by: string;
+  items?: SettlementItem[];
+}
+
+export interface SettlementItem {
+  item_id: number;
+  settlement_id: number;
+  product_id: number;
+  quantity: number;
+  price: number;
+  products?: {
+    id: number;
+    name: string;
+    code: string;
+  }
+}
+
+export async function fetchSettlementRecords(storeId?: string, startDate?: Date, endDate?: Date): Promise<SettlementRecord[]> {
+  try {
+    const params = new URLSearchParams();
+    if (storeId && storeId !== 'all') {
+      params.append('store_id', storeId);
+    }
+    if (startDate) {
+      params.append('start_date', formatDateToISOString(startDate));
+    }
+    if (endDate) {
+      params.append('end_date', formatDateToISOString(endDate));
+    }
+    const url = `${API_BASE_URL}/settlement/records${params.toString() ? '?' + params.toString() : ''}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal // 关联 AbortController
+    });
+
+    clearTimeout(timeoutId); // 清除超时
+
+    if (!response.ok) throw new Error(`API request failed fetching records: ${response.status}`);
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Error fetching settlement records: Request timed out');
+    } else {
+      console.error('Error fetching settlement records:', error);
+    }
     return [];
   }
 }

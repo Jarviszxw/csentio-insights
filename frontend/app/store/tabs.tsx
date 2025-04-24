@@ -544,9 +544,9 @@ export function StoreTabs() {
           </TabsList>
           <div className="flex items-center gap-2 ml-auto">
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
-              className="flex items-center gap-2"
+              className="flex items-center gap-1"
               onClick={handleAddStore}
             >
               <Plus className="h-4 w-4" />
@@ -555,8 +555,8 @@ export function StoreTabs() {
           </div>
         </div>
 
-        <TabsContent value="map" className="m-0">
-          <StoreMapWrapper className="h-[calc(100vh-240px)]" refreshTrigger={refreshTrigger} />
+        <TabsContent value="map">
+          <StoreMapWrapper className="h-[calc(100vh-235px)]" refreshTrigger={refreshTrigger} />
         </TabsContent>
 
         <TabsContent value="list" className="m-0">

@@ -15,6 +15,7 @@ export function SiteHeader() {
 
   // Update the state on the client side after mounting
   React.useEffect(() => {
+    // Read initial theme from class set by ThemeScript
     const isDark = document.documentElement.classList.contains("dark");
     setIsDarkMode(isDark);
   }, []);
@@ -24,6 +25,11 @@ export function SiteHeader() {
     setIsDarkMode(!isDarkMode);
     document.documentElement.classList.toggle("dark", !isDarkMode);
     localStorage.setItem("theme", newTheme);
+    // --- Start: Update cookie on toggle --- 
+    const expiryDate = new Date();
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+    document.cookie = `theme=${newTheme};path=/;expires=${expiryDate.toUTCString()};SameSite=Lax`;
+    // --- End: Update cookie on toggle ---
   };
 
   return (

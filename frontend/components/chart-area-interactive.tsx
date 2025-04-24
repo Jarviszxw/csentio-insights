@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { format, eachMonthOfInterval } from "date-fns";
+import { format } from "date-fns";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -17,8 +17,6 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { useDateRange } from "@/components/date-range-context";
-import { MonthlyDataItem, fetchMonthlyData } from "@/lib/api";
 import { Loading } from "@/components/ui/loading";
 
 interface ChartData {
@@ -27,14 +25,10 @@ interface ChartData {
   sales: number;
 }
 
-const defaultChartData: ChartData[] = [
-  { date: "2025-01-01", gmv: 300, sales: 200 },
-  { date: "2025-02-01", gmv: 400, sales: 250 },
-  { date: "2025-03-01", gmv: 350, sales: 220 },
-  { date: "2025-04-01", gmv: 380, sales: 230 },
-  { date: "2025-05-01", gmv: 165, sales: 220 },
-  { date: "2025-06-01", gmv: 446, sales: 400 },
-];
+interface ChartAreaInteractiveProps {
+  chartData: ChartData[];
+  isLoading: boolean;
+}
 
 const chartConfig = {
   visitors: {
@@ -50,63 +44,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function ChartAreaInteractive() {
+export function ChartAreaInteractive({ chartData, isLoading }: ChartAreaInteractiveProps) {
   const isMobile = useIsMobile();
-  const { dateRange } = useDateRange();
-  const [chartData, setChartData] = React.useState<ChartData[]>(defaultChartData);
-  const [isLoading, setIsLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const from = dateRange?.from ?? new Date(new Date().getFullYear(), 0, 1);
-        const to = dateRange?.to ?? new Date();
-        
-        console.log("ChartAreaInteractive: 获取月度数据，日期范围:", { from, to });
-        const data = await fetchMonthlyData(from, to);
-        
-        const allMonths = eachMonthOfInterval({ start: from, end: to })
-          .map(date => format(date, "yyyy-MM-dd"));
-          
-        const monthDataMap: Record<string, { gmv: number, sales: number }> = {};
-        if (data && data.length > 0) {
-          data.forEach(item => {
-            const monthKey = format(new Date(item.date), "yyyy-MM-dd");
-            monthDataMap[monthKey] = {
-              gmv: Number(item.gmv) || 0,
-              sales: Number(item.sales) || 0
-            };
-          });
-        }
-        
-        const completeData: ChartData[] = allMonths.map(monthKey => ({
-          date: monthKey,
-          gmv: monthDataMap[monthKey]?.gmv || 0,
-          sales: monthDataMap[monthKey]?.sales || 0
-        }));
-        
-        if (completeData.length > 0) {
-          setChartData(completeData);
-        } else {
-          console.warn("没有获取到月度数据，使用默认数据");
-          setChartData(defaultChartData);
-        }
-      } catch (error) {
-        console.error("获取月度数据失败:", error);
-        setChartData(defaultChartData);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadData();
-  }, [dateRange]);
-
-  const maxGMV = Math.max(...chartData.map(item => item.gmv));
-  const maxSales = Math.max(...chartData.map(item => item.sales));
   
   const salesScaleFactor = 50;
+
+  const displayData = chartData && chartData.length > 0 ? chartData : [];
 
   return (
     <Card className="@container/card overflow-hidden">
@@ -128,7 +71,7 @@ export function ChartAreaInteractive() {
             className="aspect-auto h-[250px]"
           >
             <AreaChart
-              data={chartData}
+              data={displayData}
               margin={{ left: 10, right: 10, top: 10, bottom: 0 }}
             >
               <defs>
@@ -166,8 +109,12 @@ export function ChartAreaInteractive() {
                 minTickGap={8}
                 padding={{ left: 20, right: 20 }}
                 tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return format(date, "MMM");
+                  try {
+                    const date = new Date(value);
+                    return isNaN(date.getTime()) ? "" : format(date, "MMM");
+                  } catch (e) {
+                    return "";
+                  }
                 }}
               />
               <YAxis 
@@ -179,20 +126,24 @@ export function ChartAreaInteractive() {
               />
               <ChartTooltip
                 cursor={false}
-                //defaultIndex={isMobile ? -1 : chartData.length > 10 ? 10 : chartData.length - 1}
                 content={
                   <ChartTooltipContent
                     labelFormatter={(value) => {
-                      return format(new Date(value), "MMM yyyy");
+                      try {
+                        return format(new Date(value), "MMM yyyy");
+                      } catch (e) {
+                        return "Invalid Date";
+                      }
                     }}
                     formatter={(value, name, props) => {
                       if (name === "GMV") {
-                        return [`¥${value.toLocaleString()}`, "GMV"];
+                        return [`¥${Number(value).toLocaleString()}`, "GMV"];
                       }
                       if (name === "Sales") {
-                        return [props.payload.sales.toLocaleString(), "Sales"];
+                        const salesVal = props?.payload?.sales;
+                        return [typeof salesVal === 'number' ? salesVal.toLocaleString() : 'N/A', "Sales"];
                       }
-                      return [value.toLocaleString(), name];
+                      return [Number(value).toLocaleString(), name];
                     }}
                     indicator="dot"
                   />
@@ -213,9 +164,9 @@ export function ChartAreaInteractive() {
                 stroke={chartConfig.sales.color}
                 strokeWidth={2}
                 name="Sales"
-                data={chartData.map(item => ({
+                data={displayData.map(item => ({
                   ...item,
-                  salesScaled: item.sales * salesScaleFactor
+                  salesScaled: (item.sales || 0) * salesScaleFactor
                 }))}
               />   
             </AreaChart>

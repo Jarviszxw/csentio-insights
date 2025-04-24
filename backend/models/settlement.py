@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Union
+from pydantic import BaseModel, Field
 from datetime import date, datetime
+from typing import Optional, List, Union
 
 class SettlementItemBase(BaseModel):
     product_id: int
@@ -21,7 +21,7 @@ class SettlementItemDB(SettlementItemBase):
     price: float
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class SettlementBase(BaseModel):
     settle_date: date
@@ -45,17 +45,44 @@ class SettlementDB(SettlementBase):
     class Config:
         from_attributes = True
 
+class ProductInfo(BaseModel):
+    product_id: int
+    sku_name: str
+    sku_code: str
+
+    class Config:
+        from_attributes = True
+
+class SettlementItemResponse(SettlementItemDB):
+    products: Optional[ProductInfo] = None
+
+    class Config:
+        from_attributes = True
+
 class SettlementResponse(SettlementDB):
-    class ProductInfo(BaseModel):
-        id: int
-        name: str
-        code: str
-        class Config:
-            from_attributes = True
-             
-    class SettlementItemResponse(SettlementItemDB):
-        products: Optional['ProductInfo'] = None
-        class Config:
-            from_attributes = True
-         
-    items: List['SettlementItemResponse'] = []
+    items: List[SettlementItemResponse] = []
+
+    class Config:
+        from_attributes = True
+
+class SettlementItemRecord(BaseModel):
+    item_id: int
+    product_id: int
+    quantity: int
+    price: float
+    products: str  # 对应产品名称（sku_name）
+
+    class Config:
+        from_attributes = True
+
+class SettlementRecord(BaseModel):
+    settlement_id: int
+    settle_date: str  # 数据库返回的日期可能是字符串
+    store: str
+    total_amount: float
+    remarks: Optional[str]
+    created_by: str
+    items: List[SettlementItemRecord]
+
+    class Config:
+        from_attributes = True

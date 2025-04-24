@@ -5,7 +5,7 @@ import "./globals.css";
 import { ThemeScript } from "./theme-script";
 import { Toaster } from "@/components/ui/sonner";
 import "leaflet/dist/leaflet.css";
-import { Providers } from "./providers"; // 导入 Providers 组件
+import { Providers } from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <ThemeScript />
       </head>
