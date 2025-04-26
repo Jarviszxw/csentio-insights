@@ -570,11 +570,11 @@ export function InventoryRecordsTable() {
           className="sm:max-w-[700px]"
           onInteractOutside={(e) => {
             const target = e.target as HTMLElement;
-            if (target.closest('.rdp, [data-radix-popper-content-wrapper]')) { e.preventDefault(); }
+            if (target.closest('.rdp')) { e.preventDefault(); }
           }}
           onPointerDownOutside={(e) => {
              const target = e.target as HTMLElement;
-             if (target.closest('.rdp, [data-radix-popper-content-wrapper]')) { e.preventDefault(); }
+             if (target.closest('.rdp')) { e.preventDefault(); }
           }}
         >
           <DialogHeader>
@@ -584,7 +584,7 @@ export function InventoryRecordsTable() {
             <div className="grid grid-cols-[200px_minmax(150px,_1fr)] gap-4 items-start">
               <div className="space-y-2">
                 <Label htmlFor="add_inventory_date">Date</Label>
-                 <Popover open={isAddDatePickerOpen} onOpenChange={setIsAddDatePickerOpen}>
+                 <Popover open={isAddDatePickerOpen} onOpenChange={setIsAddDatePickerOpen} modal={true}>
                    <PopoverTrigger asChild>
                      <Button
                         id="add_inventory_date"
@@ -726,7 +726,7 @@ export function InventoryRecordsTable() {
                     id="add_tracking_no"
                     value={addTrackingNo}
                     onChange={(e) => setAddTrackingNo(e.target.value)}
-                    placeholder="(Optional) Enter Tracking No."
+                    placeholder="Optional Tracking No."
                     className="min-h-10 max-w-[300px]"
                   />
                 </div>
@@ -737,7 +737,7 @@ export function InventoryRecordsTable() {
                     id="add_remarks"
                     value={addRemarks}
                     onChange={(e) => setAddRemarks(e.target.value)}
-                    placeholder="(Optional) Enter remarks"
+                    placeholder="Optional remarks..."
                     className="min-h-[10px]"
                   />
                 </div>
@@ -761,11 +761,11 @@ export function InventoryRecordsTable() {
             className="sm:max-w-[700px]"
              onInteractOutside={(e) => {
                 const target = e.target as HTMLElement;
-                if (target.closest('.rdp, [data-radix-popper-content-wrapper]')) { e.preventDefault(); }
+                if (target.closest('.rdp')) { e.preventDefault(); }
              }}
              onPointerDownOutside={(e) => {
                 const target = e.target as HTMLElement;
-                if (target.closest('.rdp, [data-radix-popper-content-wrapper]')) { e.preventDefault(); }
+                if (target.closest('.rdp')) { e.preventDefault(); }
              }}
         >
           <DialogHeader>
@@ -776,7 +776,7 @@ export function InventoryRecordsTable() {
                 <div className="grid grid-cols-[200px_minmax(150px,_1fr)] gap-4 items-start">
                   <div className="space-y-2">
                     <Label htmlFor="edit_inventory_date">Date</Label>
-                    <Popover open={isEditDatePickerOpen} onOpenChange={setIsEditDatePickerOpen}>
+                    <Popover open={isEditDatePickerOpen} onOpenChange={setIsEditDatePickerOpen} modal={true}>
                       <PopoverTrigger asChild>
                         <Button
                            id="edit_inventory_date"
@@ -893,7 +893,7 @@ export function InventoryRecordsTable() {
                         id="edit_tracking_no"
                         value={editFormState.trackingNo || ''}
                         onChange={(e) => handleEditInputChange('trackingNo', e.target.value)}
-                        placeholder="(Optional) Enter Tracking No."
+                        placeholder="Optional Tracking No."
                         className="min-h-10 max-w-[300px]"
                       />
                     </div>
@@ -903,7 +903,7 @@ export function InventoryRecordsTable() {
                         id="edit_remarks"
                         value={editFormState.remarks || ''}
                         onChange={(e) => handleEditInputChange('remarks', e.target.value)}
-                        placeholder="(Optional) Enter remarks"
+                        placeholder="Optional remarks..."
                         className="min-h-[10px]"
                       />
                     </div>
