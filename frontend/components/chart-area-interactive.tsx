@@ -63,7 +63,7 @@ export function ChartAreaInteractive({ chartData, isLoading }: ChartAreaInteract
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         {isLoading ? (
           <div className="aspect-auto h-[250px] flex items-center justify-center">
-            <Loading size="lg" />
+            <Loading size="md" />
           </div>
         ) : (
           <ChartContainer 

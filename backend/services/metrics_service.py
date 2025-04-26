@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 def fetch_gmv_in_range(
     supabase: Client,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    store_id: Optional[int] = None
 ) -> Tuple[float, bool]:
-    logger.info(f"Fetching GMV for range: {start_date} to {end_date}")
+    logger.info(f"Fetching GMV for range: {start_date} to {end_date}, store_id: {store_id}")
     query = supabase.table("settlements").select("total_amount")
     if start_date:
         query = query.gte("settle_date", start_date.isoformat())
@@ -23,6 +24,9 @@ def fetch_gmv_in_range(
     if end_date:
         query = query.lte("settle_date", end_date.isoformat())
         logger.info(f"Added end_date filter: {end_date.isoformat()}")
+    if store_id is not None:
+        query = query.eq("store_id", store_id)
+        logger.info(f"Added store_id filter: {store_id}")
 
     logger.info(f"Executing Supabase query...")
     settlements_result = query.execute()
@@ -73,9 +77,10 @@ def fetch_stores_change_count_in_range(
 async def fetch_sales_in_range(
     supabase: Client,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    store_id: Optional[int] = None
 ) -> Tuple[int, bool]:
-    logger.info(f"Fetching sales for range: {start_date} to {end_date}")
+    logger.info(f"Fetching sales for range: {start_date} to {end_date}, store_id: {store_id}")
     query = supabase.table("settlements").select("settlement_id")
     if start_date:
         query = query.gte("settle_date", start_date.isoformat())
@@ -83,6 +88,9 @@ async def fetch_sales_in_range(
     if end_date:
         query = query.lte("settle_date", end_date.isoformat())
         logger.info(f"Added end_date filter: {end_date.isoformat()}")
+    if store_id is not None:
+        query = query.eq("store_id", store_id)
+        logger.info(f"Added store_id filter: {store_id}")
 
     logger.info(f"Executing settlements query...")
     settlements_result = query.execute()
@@ -109,24 +117,25 @@ async def fetch_sales_in_range(
 async def get_total_sales(
     supabase: Client,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    store_id: Optional[int] = None
 ) -> SalesResponse:
     try:
         if start_date and end_date and start_date > end_date:
             raise HTTPException(status_code=400, detail="start_date must be less than or equal to end_date")
 
         if not start_date or not end_date:
-            total_sales, _ = await fetch_sales_in_range(supabase)
+            total_sales, _ = await fetch_sales_in_range(supabase, store_id=store_id)
             return SalesResponse(
                 total_sales=total_sales,
                 pop_percentage=0,
                 trend="up"
             )
 
-        total_sales, _ = await fetch_sales_in_range(supabase, start_date, end_date)
+        total_sales, _ = await fetch_sales_in_range(supabase, start_date, end_date, store_id)
 
         prev_start_date, prev_end_date = get_previous_date_range(start_date, end_date)
-        previous_sales, _ = await fetch_sales_in_range(supabase, prev_start_date, prev_end_date)
+        previous_sales, _ = await fetch_sales_in_range(supabase, prev_start_date, prev_end_date, store_id)
 
         pop_percentage = cal_pop_percentage(total_sales, previous_sales)
         trend = "up" if pop_percentage >= 0 else "down"

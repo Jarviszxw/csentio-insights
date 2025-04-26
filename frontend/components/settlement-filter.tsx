@@ -108,8 +108,8 @@ export function SettlementFilter() {
             <TabsTrigger value="by-store">By Store</TabsTrigger>
           </TabsList>
         </Tabs>
-        {/* Show skeleton loader for the select */}
-        <Skeleton className="h-10 w-[180px]" /> 
+        {/* Show skeleton loader for the select only if viewMode is 'by-store' and loading */}
+        {viewMode === 'by-store' && loadingStores && <Skeleton className="h-10 w-[180px]" />}
       </div>
     );
   }

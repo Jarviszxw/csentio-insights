@@ -13,8 +13,10 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, fetchTotalGMV, fetchTotalSales } from "@/lib/api";
 import { formatDateToISOString } from "@/lib/utils";
+import { useSettlementView } from './settlement-filter';
+import React from "react";
 
 type MetricData = {
   value: number;
@@ -24,40 +26,33 @@ type MetricData = {
 
 export function SettlementStatistics() {
   const { dateRange } = useDateRange();
+  const { viewMode, storeId, stores } = useSettlementView();
+
   const [gmvData, setGmvData] = useState<MetricData>({ value: 0, percentage: 0, trend: "up" });
   const [salesData, setSalesData] = useState<MetricData>({ value: 0, percentage: 0, trend: "up" });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      console.log("Statistics: Fetching data...");
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (dateRange?.from) {
-          params.append("start_date", formatDateToISOString(dateRange.from));
-        }
-        if (dateRange?.to) {
-          params.append("end_date", formatDateToISOString(dateRange.to));
-        }
-
         // Fetch GMV data
-        const gmvResponse = await fetch(`${API_BASE_URL}/metrics/total-gmv?${params.toString()}`);
-        if (!gmvResponse.ok) throw new Error("Failed to fetch GMV data");
-        const gmvResult = await gmvResponse.json();
+        const gmvResponse = await fetchTotalGMV(dateRange?.from, dateRange?.to, storeId);
+        if (gmvResponse.error) throw new Error(gmvResponse.error);
         setGmvData({
-          value: gmvResult.total_gmv || 0,
-          percentage: gmvResult.pop_percentage || 0,
-          trend: gmvResult.trend || "up",
+          value: gmvResponse.total_gmv || 0,
+          percentage: typeof gmvResponse.pop_percentage === 'number' ? gmvResponse.pop_percentage : 0,
+          trend: gmvResponse.trend || "up",
         });
 
         // Fetch Sales data
-        const salesResponse = await fetch(`${API_BASE_URL}/metrics/total-sales?${params.toString()}`);
-        if (!salesResponse.ok) throw new Error("Failed to fetch Sales data");
-        const salesResult = await salesResponse.json();
+        const salesResponse = await fetchTotalSales(dateRange?.from, dateRange?.to, storeId);
+        if (salesResponse.error) throw new Error(salesResponse.error);
         setSalesData({
-          value: salesResult.total_sales || 0,
-          percentage: salesResult.pop_percentage || 0,
-          trend: salesResult.trend || "up",
+          value: salesResponse.total_sales || 0,
+          percentage: typeof salesResponse.pop_percentage === 'number' ? salesResponse.pop_percentage : 0,
+          trend: salesResponse.trend || "up",
         });
       } catch (error) {
         console.error("Error fetching statistics:", error);
@@ -65,8 +60,14 @@ export function SettlementStatistics() {
         setLoading(false);
       }
     };
+
+    // Simple logic: fetch data whenever dateRange or storeId changes.
+    // The backend handles the case where storeId is 'all'.
+    console.log(`Statistics: useEffect triggered/fetching. storeId: ${storeId}, dateRange:`, dateRange);
     fetchData();
-  }, [dateRange]);
+
+  // Dependencies: trigger effect when dateRange or storeId changes
+  }, [dateRange, storeId]);
 
   const formatPercentage = (percentage: number): string => {
     return `${percentage > 0 ? "+" : ""}${percentage}%`;
@@ -75,11 +76,16 @@ export function SettlementStatistics() {
   const formattedGMV = `¥${gmvData.value.toLocaleString()}`;
   const formattedSales = salesData.value.toLocaleString();
 
+  // Determine card title based on viewMode and storeId
+  const getStoreName = (id: string) => stores.find(s => String(s.store_id) === id)?.store_name || `Store ${id}`;
+  const gmvTitle = viewMode === 'by-store' && storeId !== 'all' ? `${getStoreName(storeId)} GMV` : 'Total GMV';
+  const salesTitle = viewMode === 'by-store' && storeId !== 'all' ? `${getStoreName(storeId)} Sales` : 'Total Sales';
+
   return (
     <div className="flex w-full gap-4 overflow-x-auto [&>*]:min-w-[280px] [&>*]:flex-1">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription className="text-l font-semibold tabular-nums">Total GMV</CardDescription>
+          <CardDescription className="text-l font-semibold tabular-nums">{gmvTitle}</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {loading ? (
               <div className="mt-2 h-8 w-20 bg-muted animate-pulse rounded"></div>
@@ -111,7 +117,7 @@ export function SettlementStatistics() {
 
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription className="text-l font-semibold tabular-nums">Total Sales</CardDescription>
+          <CardDescription className="text-l font-semibold tabular-nums">{salesTitle}</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl h-9">
             {loading ? (
               <div className="mt-2 h-8 w-20 bg-muted animate-pulse rounded"></div>

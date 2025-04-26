@@ -446,23 +446,24 @@ export function SettlementRecordsTable() {
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-10 w-32" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-5 w-8 inline-block" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell className="text-right">
-                    <Skeleton className="h-8 w-8 inline-block" />
+                    <Skeleton className="h-8 w-8 inline-block ml-1" />
+                    <Skeleton className="h-8 w-8 inline-block ml-1" />
                   </TableCell>
                 </TableRow>
               ))
-            ) : records.length === 0 ? (
+            ) : currentRecords.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                  No settlement records found. Click "Add" to create a new record.
+                  {filteredRecords.length === 0 && !recordsLoading ?
+                    'No settlement records found for the selected criteria. Click "Add" to create one.' :
+                    'No records on this page.'}
                 </TableCell>
               </TableRow>
             ) : (
-              records.map((record) => (
+              currentRecords.map((record) => (
                 <TableRow key={record.id}>
                   <TableCell>{record.settle_date}</TableCell>
                   <TableCell className="text-left">
@@ -472,7 +473,7 @@ export function SettlementRecordsTable() {
                   <TableCell>{record.remarks || "-"}</TableCell>
                   <TableCell>{record.created_by}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end space-x-1">
+                    <div className="flex justify-end">
                       <Button
                         variant="ghost"
                         size="icon"

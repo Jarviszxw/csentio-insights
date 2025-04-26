@@ -71,11 +71,12 @@ function getMonthRange(date: Date): { start: Date; end: Date } {
  * 获取总 GMV 的函数
  * @param from 可选的开始日期
  * @param to 可选的结束日期
+ * @param storeId 可选的店铺ID
  * @returns 返回GMV数据对象
  */
-export async function fetchTotalGMV(from?: Date, to?: Date): Promise<GMVResponse> {
+export async function fetchTotalGMV(from?: Date, to?: Date, storeId?: string): Promise<GMVResponse> {
   try {
-    console.log("API: 开始获取GMV数据，日期范围:", { from, to });
+    console.log("API: 开始获取GMV数据，日期范围:", { from, to, storeId });
 
     const params = new URLSearchParams();
 
@@ -91,6 +92,12 @@ export async function fetchTotalGMV(from?: Date, to?: Date): Promise<GMVResponse
       const formattedToDate = formatDateToISOString(end);
       params.append('end_date', formattedToDate);
       console.log("API: 使用月末日期:", formattedToDate);
+    }
+
+    // Add store_id if provided and not 'all'
+    if (storeId && storeId !== 'all') {
+      params.append('store_id', storeId);
+      console.log("API: 使用店铺ID:", storeId);
     }
 
     const url = `${API_BASE_URL}/metrics/total-gmv${params.toString() ? '?' + params.toString() : ''}`;
@@ -137,11 +144,12 @@ export async function fetchTotalGMV(from?: Date, to?: Date): Promise<GMVResponse
  * 获取总销售额的函数
  * @param from 可选的开始日期
  * @param to 可选的结束日期
+ * @param storeId 可选的店铺ID
  * @returns 返回总销售额数据对象
  */
-export async function fetchTotalSales(from?: Date, to?: Date): Promise<SalesResponse> {
+export async function fetchTotalSales(from?: Date, to?: Date, storeId?: string): Promise<SalesResponse> {
   try {
-    console.log("API: 开始获取总销售额数据，日期范围:", { from, to });
+    console.log("API: 开始获取总销售额数据，日期范围:", { from, to, storeId });
 
     const params = new URLSearchParams();
 
@@ -157,6 +165,12 @@ export async function fetchTotalSales(from?: Date, to?: Date): Promise<SalesResp
       const formattedToDate = formatDateToISOString(end);
       params.append('end_date', formattedToDate);
       console.log("API: 使用月末日期:", formattedToDate);
+    }
+
+    // Add store_id if provided and not 'all'
+    if (storeId && storeId !== 'all') {
+      params.append('store_id', storeId);
+      console.log("API: 使用店铺ID:", storeId);
     }
 
     const url = `${API_BASE_URL}/metrics/total-sales${params.toString() ? '?' + params.toString() : ''}`;
@@ -457,6 +471,7 @@ export interface InventoryRecord {
   inventory_date: string;
   type: 'stock' | 'sample';
   is_sample?: boolean;
+  shipmentGroupId?: string | null;
 }
 
 export interface Product {
@@ -561,7 +576,7 @@ export async function fetchInventoryRecords(storeId?: string, startDate?: Date, 
 
     return data.map((record: any) => ({
       ...record,
-      type: record.is_sample === true ? 'sample' : 'inventory',
+      type: record.is_sample === true ? 'sample' : 'stock',
     }));
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -648,7 +663,7 @@ export async function updateInventoryRecord(recordId: string, recordData: Partia
   const updatedRecord = await response.json();
   return {
       ...updatedRecord,
-      type: updatedRecord.is_sample === true ? 'sample' : 'inventory',
+      type: updatedRecord.is_sample === true ? 'sample' : 'stock',
   };
 }
 

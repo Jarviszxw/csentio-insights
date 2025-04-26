@@ -14,35 +14,36 @@ router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 async def get_total_sales(
     supabase: Client = Depends(get_supabase),
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    store_id: Optional[int] = None
 ):
-    logger.info(f"API Call /api/metrics/total-sales: Get total sales from {start_date} to {end_date}")
-
-    return await metrics_service.get_total_sales(supabase, start_date, end_date)
+    logger.info(f"API Call /api/metrics/total-sales: Get total sales from {start_date} to {end_date} for store {store_id}")
+    return await metrics_service.get_total_sales(supabase, start_date, end_date, store_id)
 
 @router.get("/total-gmv")
 async def get_total_gmv(
     supabase: Client = Depends(get_supabase),
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    store_id: Optional[int] = None
 ):
-    logger.info(f"API Call /api/metrics/total-gmv: Get total gmv from {start_date} to {end_date}")
+    logger.info(f"API Call /api/metrics/total-gmv: Get total gmv from {start_date} to {end_date} for store {store_id}")
     try:
         if start_date and end_date and start_date > end_date:
             raise HTTPException(status_code=400, detail="start_date must be less than or equal to end_date")
 
         if not start_date or not end_date:
-            total_gmv, _ = metrics_service.fetch_gmv_in_range(supabase)
+            total_gmv, _ = metrics_service.fetch_gmv_in_range(supabase, store_id=store_id)
             return {
                 "total_gmv": total_gmv,
                 "pop_percentage": 0,
                 "trend": "up"
             }
 
-        total_gmv, _ = metrics_service.fetch_gmv_in_range(supabase, start_date, end_date)
+        total_gmv, _ = metrics_service.fetch_gmv_in_range(supabase, start_date, end_date, store_id)
 
         prev_start_date, prev_end_date = metrics_service.get_previous_date_range(start_date, end_date)
-        previous_gmv, has_previous_data = metrics_service.fetch_gmv_in_range(supabase, prev_start_date, prev_end_date)
+        previous_gmv, has_previous_data = metrics_service.fetch_gmv_in_range(supabase, prev_start_date, prev_end_date, store_id)
 
         pop_percentage = metrics_service.cal_pop_percentage(total_gmv, previous_gmv)
         trend = "up" if pop_percentage >= 0 else "down"

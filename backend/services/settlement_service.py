@@ -274,23 +274,39 @@ async def get_settlement_records(db: Client, store_id: Optional[int] = None, sta
         logger.error(f"Error fetching settlement records for store {store_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch settlement records: {str(e)}")
 
-async def get_settlement_products(db: Client, store_id: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[SettlementProduct]:
+async def get_settlement_products(db: Client, store_id: Optional[int] = None, start_date: Optional[date] = None, end_date: Optional[date] = None) -> List[SettlementProduct]:
     try:
         logger.info(f"Fetching settlement products for store {store_id}, start_date={start_date}, end_date={end_date}")
 
-        # 首先从 settlement_items 表查询，并关联 settlements 表以应用过滤条件
-        query = db.table("settlement_items").select("*, products(*), settlements!settlement_items_settlement_id_fkey(*)")
-        
-        # 应用过滤条件
+        # Step 1: Find relevant settlement IDs based on store_id and date range
+        settlements_query = db.table("settlements").select("settlement_id")
         if store_id:
-            query = query.eq("settlements.store_id", store_id)
+            settlements_query = settlements_query.eq("store_id", store_id)
         if start_date:
-            query = query.gte("settlements.settle_date", start_date.isoformat())
+            settlements_query = settlements_query.gte("settle_date", start_date.isoformat())
         if end_date:
-            query = query.lte("settlements.settle_date", end_date.isoformat())
+            settlements_query = settlements_query.lte("settle_date", end_date.isoformat())
+        
+        settlements_result = settlements_query.execute()
+        matching_settlements = getattr(settlements_result, "data", [])
+        settlement_ids = [s["settlement_id"] for s in matching_settlements if "settlement_id" in s]
 
-        result = query.execute()
+        logger.info(f"Found {len(settlement_ids)} matching settlement IDs for store {store_id} and date range: {settlement_ids}")
+
+        # Step 2: If no matching settlements, return empty list
+        if not settlement_ids:
+            return []
+
+        # Step 3: Fetch settlement items for the found settlement IDs
+        items_query = db.table("settlement_items").select("*, products(*)")
+        items_query = items_query.in_("settlement_id", settlement_ids)
+        
+        result = items_query.execute()
         items = getattr(result, "data", [])
+        logger.info(f"Fetched {len(items)} settlement items for the matching settlement IDs.")
+
+        # Log the items returned by the Supabase query *after* filtering
+        # logger.info(f"Settlement products: Items returned after Supabase query for store {store_id} and date range: {items}")
 
         # 按产品汇总数量
         product_summary = {}
