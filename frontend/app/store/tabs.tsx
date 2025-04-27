@@ -3,11 +3,11 @@
 import * as React from "react";
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StoreList } from "@/components/store-list";
-import { StoreMapWrapper } from "@/components/store-map-wrapper";
+import { StoreList } from "@/components/store/store-list";
+import { StoreMapWrapper } from "@/components/store/store-map-wrapper";
 import { MapIcon, ListIcon, Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useStoreView } from "@/components/store-context";
+import { useStoreView } from "@/components/store/store-context";
 import {
   Dialog,
   DialogContent,

@@ -87,22 +87,24 @@ CREATE INDEX idx_settlements_settle_month ON settlements(settle_month);
 CREATE INDEX idx_inventory_shipments_shipping_date ON inventory_shipments(shipping_date);
 
 -- 创建库存视图
-CREATE VIEW inventory_view AS
-SELECT 
-    i.store_id,
-    i.product_id,
-    SUM(i.quantity) 
-    - COALESCE(SUM(CASE WHEN i.is_sample = TRUE THEN i.quantity ELSE 0 END), 0) 
-    - COALESCE(SUM(si.quantity), 0) AS stock
-FROM 
-    inventory_shipments i
-LEFT JOIN 
-    settlements s 
-    ON i.store_id = s.store_id
-LEFT JOIN 
-    settlement_items si 
-    ON s.settlement_id = si.settlement_id 
-    AND i.product_id = si.product_id
-GROUP BY 
-    i.store_id, i.product_id;
+CREATE VIEW stock_view AS
+SELECT
+  i.store_id,
+  i.product_id,
+  COALESCE(
+    SUM(CASE WHEN i.is_sample = FALSE THEN i.quantity ELSE 0 END),
+    0::bigint
+  ) - COALESCE(
+    (SELECT SUM(si.quantity)
+     FROM settlements s
+     JOIN settlement_items si ON s.settlement_id = si.settlement_id
+     WHERE s.store_id = i.store_id
+       AND si.product_id = i.product_id),
+    0::bigint
+  ) AS stock
+FROM
+  inventory_shipments i
+GROUP BY
+  i.store_id,
+  i.product_id;
     

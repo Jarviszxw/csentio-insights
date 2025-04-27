@@ -5,10 +5,10 @@ import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useStoreView } from "./store-context";
 import supabase from "@/lib/supabase";
-import { Store } from "@/components/map-components";
+import { Store } from "@/components/store/map-components";
 // Import the map component dynamically with correct default export
 const MapComponents = dynamic(
-  () => import("@/components/map-components").then(mod => ({ default: mod.MapComponents })),
+  () => import("@/components/store/map-components").then(mod => ({ default: mod.MapComponents })),
   { 
     ssr: false,
     loading: () => (

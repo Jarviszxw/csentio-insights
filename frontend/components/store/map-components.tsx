@@ -13,7 +13,7 @@ import {
   TooltipTrigger 
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { StoreDetailsDialog } from "@/components/store-details-dialog";
+import { StoreDetailsDialog } from "@/components/store/store-details-dialog";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import * as LMarkerCluster from "leaflet.markercluster";

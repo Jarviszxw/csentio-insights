@@ -6,10 +6,10 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { SettlementFilter, SettlementViewProvider } from "@/components/settlement-filter"
-import { SettlementStatistics } from "@/components/settlement-statistics"
-import { SettlementProductChart } from "@/components/settlement-product-chart"
-import { SettlementRecordsTable } from "@/components/settlement-records-table"
+import { SettlementFilter, SettlementViewProvider } from "@/components/settlement/settlement-filter"
+import { SettlementStatistics } from "@/components/settlement/settlement-statistics"
+import { SettlementProductChart } from "@/components/settlement/settlement-product-chart"
+import { SettlementRecordsTable } from "@/components/settlement/settlement-records-table"
 
 import React from "react"
 

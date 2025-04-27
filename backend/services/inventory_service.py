@@ -44,7 +44,7 @@ async def get_inventory_statistics(supabase: Client, store_id: Optional[int] = N
         ]
         sample_total = sum(sample_by_product.values())
 
-        inventory_query = supabase.table("inventory_view").select("product_id, stock")
+        inventory_query = supabase.table("stock_view").select("product_id, stock")
         if store_id:
             inventory_query = inventory_query.eq("store_id", store_id)
 
@@ -92,7 +92,7 @@ async def get_inventory_statistics(supabase: Client, store_id: Optional[int] = N
 
 async def get_inventory_distribution(supabase: Client, store_id: Optional[int] = None) -> List[InventoryDistributionItem]:
     try:
-        query = supabase.table("inventory_view").select("product_id, stock")
+        query = supabase.table("stock_view").select("product_id, stock")
         if store_id:
             query = query.eq("store_id", store_id)
 

@@ -2,9 +2,9 @@
 
 import * as React from "react"; // Import React
 import { DimensionDataItem } from "@/lib/api"; // Import type
-import { GMVByStoreChart } from "@/components/gmv-by-store-chart";
-import { GMVByProductChart } from "@/components/gmv-by-product-chart";
-import { GMVByCityChart } from "@/components/gmv-by-city-chart";
+import { GMVByStoreChart } from "@/components/dashboard/gmv-by-store-chart";
+import { GMVByProductChart } from "@/components/dashboard/gmv-by-product-chart";
+import { GMVByCityChart } from "@/components/dashboard/gmv-by-city-chart";
 
 // --- Start: Define Props Interface ---
 interface GMVByMetricsProps {

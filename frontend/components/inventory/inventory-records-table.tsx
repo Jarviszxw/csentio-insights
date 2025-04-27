@@ -378,7 +378,7 @@ export function InventoryRecordsTable() {
                 <TableHead>Date</TableHead>
                 <TableHead>Store</TableHead>
                 <TableHead>Product</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
+                <TableHead className="text-center">Qty</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Tracking No.</TableHead>
                 <TableHead>Remarks</TableHead>
@@ -422,7 +422,7 @@ export function InventoryRecordsTable() {
                   <TableHead className="pl-10">Date</TableHead>
                   <TableHead>Store</TableHead>
                   <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
+                  <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="pl-5">Type</TableHead>
                   <TableHead>Tracking No.</TableHead>
                   <TableHead>Remarks</TableHead>

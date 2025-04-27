@@ -3,17 +3,17 @@
 import * as React from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { useDateRange } from "@/components/date-range-context";
-import { fetchTotalGMV, fetchTotalSales, fetchTotalStores, fetchMonthlyData, fetchGMVByDimension, GMVResponse, SalesResponse, StoresResponse, MonthlyDataItem, DimensionDataItem } from "@/lib/api";
+import {  fetchTotalStores, fetchMonthlyData, fetchGMVByDimension, GMVResponse, SalesResponse, StoresResponse, MonthlyDataItem, DimensionDataItem, fetchTotalGMV, fetchTotalSales } from "@/lib/api";
 
 import { AppSidebar } from "@/components/app-sidebar"
-import { ChartAreaInteractive } from "@/components/chart-area-interactive"
-import { SectionCards } from "@/components/section-cards"
+import { ChartAreaInteractive } from "@/components/dashboard/chart-area-interactive"
+import { SectionCards } from "@/components/dashboard/section-cards"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { GMVByMetrics } from "@/components/gmv-by-metrics"
+import { GMVByMetrics } from "@/components/dashboard/gmv-by-metrics"
 import { format, eachMonthOfInterval } from "date-fns";
 
 export default function Page() {

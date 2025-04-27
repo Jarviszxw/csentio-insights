@@ -3,10 +3,10 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AppSidebar } from "@/components/app-sidebar";
-import { InventoryFilter, InventoryViewContext, ViewMode } from "@/components/inventory-filter"; // 导入 InventoryViewContext 和 ViewMode
-import { InventoryRecordsTable } from "@/components/inventory-records-table";
-import { InventoryStatistics } from "@/components/inventory-statistics";
-import { InventoryScatterChart } from "@/components/inventory-scatter-chart";
+import { InventoryFilter, InventoryViewContext, ViewMode } from "@/components/inventory/inventory-filter"; // 导入 InventoryViewContext 和 ViewMode
+import { InventoryRecordsTable } from "@/components/inventory/inventory-records-table";
+import { InventoryStatistics } from "@/components/inventory/inventory-statistics";
+import { InventoryScatterChart } from "@/components/inventory/inventory-scatter-chart";
 import { SiteHeader } from "@/components/site-header";
 import {
   SidebarInset,

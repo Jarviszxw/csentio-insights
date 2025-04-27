@@ -5,6 +5,7 @@ import * as React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { DateRangeProvider } from '@/components/date-range-context';
+import { SupabaseAuthProvider } from '@/components/auth/supabase-auth-provider';
 
 // 创建 QueryClient 实例
 const queryClient = new QueryClient({
@@ -18,11 +19,13 @@ const queryClient = new QueryClient({
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <DateRangeProvider>
-        {children}
-        <ReactQueryDevtools initialIsOpen={false} />
-      </DateRangeProvider>
-    </QueryClientProvider>
+    <SupabaseAuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <DateRangeProvider>
+          {children}
+          <ReactQueryDevtools initialIsOpen={false} />
+        </DateRangeProvider>
+      </QueryClientProvider>
+    </SupabaseAuthProvider>
   );
 }

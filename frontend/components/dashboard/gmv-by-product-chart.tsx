@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { IconTrendingUp, IconTrendingDown } from "@tabler/icons-react";
-import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { format } from "date-fns";
 import { useDateRange } from "@/components/date-range-context";
 import { DimensionDataItem, fetchGMVByDimension } from "@/lib/api";
@@ -21,15 +20,15 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Loading } from "@/components/ui/loading";
-import { Skeleton } from "./ui/skeleton";
+import { Skeleton } from "../ui/skeleton";
 
 interface ChartData {
-  city: string;
+  product: string;
   gmv: number;
   trend: number;
 }
 
-interface GMVByCityChartProps {
+interface GMVByProductChartProps {
   chartData: DimensionDataItem[];
   isLoading: boolean;
   skipLoading?: boolean;
@@ -38,20 +37,20 @@ interface GMVByCityChartProps {
 const chartConfig = {
   gmv: {
     label: "GMV",
-    color: "hsl(201, 100%, 81%)", 
+    color: "hsl(201, 100%, 81%)",
   },
   label: {
     color: "hsl(var(--background))",
   },
 } satisfies ChartConfig;
 
-export function GMVByCityChart({ chartData: rawData, isLoading, skipLoading = false }: GMVByCityChartProps) {
+export function GMVByProductChart({ chartData: rawData, isLoading, skipLoading = false }: GMVByProductChartProps) {
   const { dateRange } = useDateRange();
 
   const chartData: ChartData[] = React.useMemo(() => {
     if (!rawData) return [];
     return rawData.map(item => ({
-      city: item.city || String(item.name) || 'Unknown',
+      product: item.product || String(item.name) || 'Unknown',
       gmv: Number(item.gmv) || 0,
       trend: typeof item.trend === 'number' ? item.trend : 0
     }));
@@ -68,7 +67,7 @@ export function GMVByCityChart({ chartData: rawData, isLoading, skipLoading = fa
     <Card className="bg-white dark:bg-black">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>GMV by City</CardTitle>
+          <CardTitle>GMV by Product</CardTitle>
         </div>
         <CardDescription>
         {dateRange?.from && dateRange?.to ? (
@@ -101,7 +100,7 @@ export function GMVByCityChart({ chartData: rawData, isLoading, skipLoading = fa
             >
               <CartesianGrid horizontal={false} vertical={false} />
               <YAxis
-                dataKey="city"
+                dataKey="product"
                 type="category"
                 tickLine={false}
                 tickMargin={10}
@@ -127,7 +126,7 @@ export function GMVByCityChart({ chartData: rawData, isLoading, skipLoading = fa
                 radius={4}
               >
                 <LabelList
-                  dataKey="city"
+                  dataKey="product"
                   position="insideLeft"
                   offset={8}
                   className="fill-[--color-label]"

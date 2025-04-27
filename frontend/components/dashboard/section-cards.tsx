@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loading } from "./ui/loading";
+import { Loading } from "../ui/loading";
 import { cn } from "@/lib/utils";
 
 interface SectionCardsProps {

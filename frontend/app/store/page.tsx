@@ -7,7 +7,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { StoreTabs } from "./tabs";
-import { StoreViewProvider } from "@/components/store-context";
+import { StoreViewProvider } from "@/components/store/store-context";
 
 export default function StorePage() {
   return (

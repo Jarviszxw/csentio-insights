@@ -33,7 +33,7 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 
 const data = {
   user: {

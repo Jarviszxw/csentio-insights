@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSettlementView } from "./settlement-filter";
-import { useDateRange } from "./date-range-context";
+import { useDateRange } from "../date-range-context";
 import { API_BASE_URL } from "@/lib/api";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Loading } from "@/components/ui/loading";
