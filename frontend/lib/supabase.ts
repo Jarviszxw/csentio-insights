@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -18,9 +18,9 @@ if (!supabaseKey) {
   throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY');
 }
 
-// 创建Supabase客户端 (此时可以确定 supabaseUrl 和 supabaseKey 都是 string)
-const supabase = createClient(supabaseUrl, supabaseKey);
+// 创建Supabase客户端 (使用 Pages Browser Client)
+const supabase = createPagesBrowserClient({ supabaseUrl, supabaseKey }); // Pass options object
 
-console.log('Supabase client created successfully.');
+console.log('Supabase pages browser client created successfully.');
 
 export default supabase; 

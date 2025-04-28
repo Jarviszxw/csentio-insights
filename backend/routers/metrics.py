@@ -1,8 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional, List
+from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import List, Optional, Dict, Any
 from datetime import date
+from pydantic import BaseModel
 from supabase import Client
-from db.database import get_supabase
+from dependencies import get_current_user_supabase_client
+# Use direct imports
+# Comment out imports for models not defined in models/metrics.py
+from models.metrics import SalesResponse # Keep this one if used
+# from models.metrics import (
+#     OverallSummaryResponse, StorePerformanceResponse, ProductPerformanceResponse,
+#     SalesTrendsResponse, GeoDistributionResponse, InventoryAnalysisResponse,
+#     SettlementOverviewResponse
+# )
 from services import metrics_service
 import logging
 
@@ -10,9 +19,140 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
+# Define placeholder models or adjust routes if these are needed
+class PlaceholderResponse(BaseModel):
+    message: str = "Model definition pending"
+
+# Comment out or adjust routes using undefined models
+# @router.get("/overall-summary", response_model=OverallSummaryResponse)
+@router.get("/overall-summary", response_model=PlaceholderResponse) # Use placeholder
+async def get_overall_summary(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    supabase: Client = Depends(get_current_user_supabase_client)
+):
+    """Retrieve overall summary metrics."""
+    logger.info(f"API Call GET /api/metrics/overall-summary from {start_date} to {end_date}")
+    try:
+        # summary = await metrics_service.get_overall_summary(supabase, start_date, end_date)
+        # return summary
+        return PlaceholderResponse()
+    except Exception as e:
+        logger.error(f"Error in get_overall_summary: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving overall summary.")
+
+# @router.get("/store-performance", response_model=List[StorePerformanceResponse])
+@router.get("/store-performance", response_model=List[PlaceholderResponse]) # Use placeholder
+async def get_store_performance(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    sort_by: str = 'total_revenue', 
+    ascending: bool = False,
+    supabase: Client = Depends(get_current_user_supabase_client)
+):
+    """Retrieve performance metrics for each store."""
+    logger.info(f"API Call GET /api/metrics/store-performance from {start_date} to {end_date}")
+    try:
+        # performance = await metrics_service.get_store_performance(supabase, start_date, end_date, sort_by, ascending)
+        # return performance
+         return [PlaceholderResponse()]
+    except Exception as e:
+        logger.error(f"Error in get_store_performance: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving store performance.")
+
+# @router.get("/product-performance", response_model=List[ProductPerformanceResponse])
+@router.get("/product-performance", response_model=List[PlaceholderResponse]) # Use placeholder
+async def get_product_performance(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    sort_by: str = 'total_revenue', 
+    ascending: bool = False,
+    supabase: Client = Depends(get_current_user_supabase_client)
+):
+    """Retrieve performance metrics for each product."""
+    logger.info(f"API Call GET /api/metrics/product-performance from {start_date} to {end_date}")
+    try:
+        # performance = await metrics_service.get_product_performance(supabase, start_date, end_date, sort_by, ascending)
+        # return performance
+        return [PlaceholderResponse()]
+    except Exception as e:
+        logger.error(f"Error in get_product_performance: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving product performance.")
+
+# @router.get("/sales-trends", response_model=SalesTrendsResponse)
+@router.get("/sales-trends", response_model=PlaceholderResponse) # Use placeholder
+async def get_sales_trends(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    interval: str = 'month', # 'day', 'week', 'month'
+    store_id: Optional[int] = None,
+    product_id: Optional[int] = None,
+    supabase: Client = Depends(get_current_user_supabase_client)
+):
+    """Retrieve sales trends over time."""
+    logger.info(f"API Call GET /api/metrics/sales-trends from {start_date} to {end_date}")
+    try:
+        # trends = await metrics_service.get_sales_trends(supabase, start_date, end_date, interval, store_id, product_id)
+        # return trends
+        return PlaceholderResponse()
+    except Exception as e:
+        logger.error(f"Error in get_sales_trends: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving sales trends.")
+
+# @router.get("/geospatial-distribution", response_model=List[GeoDistributionResponse])
+@router.get("/geospatial-distribution", response_model=List[PlaceholderResponse]) # Use placeholder
+async def get_geospatial_distribution(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    supabase: Client = Depends(get_current_user_supabase_client)
+):
+    """Retrieve geospatial distribution of sales or stores."""
+    logger.info(f"API Call GET /api/metrics/geospatial-distribution from {start_date} to {end_date}")
+    try:
+        # distribution = await metrics_service.get_geospatial_distribution(supabase, start_date, end_date)
+        # return distribution
+        return [PlaceholderResponse()]
+    except Exception as e:
+        logger.error(f"Error in get_geospatial_distribution: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving geospatial distribution.")
+
+# @router.get("/inventory-analysis", response_model=InventoryAnalysisResponse)
+@router.get("/inventory-analysis", response_model=PlaceholderResponse) # Use placeholder
+async def get_inventory_analysis(
+    supabase: Client = Depends(get_current_user_supabase_client),
+    store_id: Optional[int] = None, # Optional filtering by store
+    low_stock_threshold: int = 10 # Example threshold
+):
+    """Retrieve inventory analysis including stock levels and potential low stock items."""
+    logger.info(f"API Call GET /api/metrics/inventory-analysis for store {store_id}")
+    try:
+        # analysis = await metrics_service.get_inventory_analysis(supabase, store_id, low_stock_threshold)
+        # return analysis
+        return PlaceholderResponse()
+    except Exception as e:
+        logger.error(f"Error in get_inventory_analysis: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving inventory analysis.")
+
+# @router.get("/settlement-overview", response_model=SettlementOverviewResponse)
+@router.get("/settlement-overview", response_model=PlaceholderResponse) # Use placeholder
+async def get_settlement_overview(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    supabase: Client = Depends(get_current_user_supabase_client)
+):
+    """Retrieve overview of settlements."""
+    logger.info(f"API Call GET /api/metrics/settlement-overview from {start_date} to {end_date}")
+    try:
+        # overview = await metrics_service.get_settlement_overview(supabase, start_date, end_date)
+        # return overview
+        return PlaceholderResponse()
+    except Exception as e:
+        logger.error(f"Error in get_settlement_overview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving settlement overview.")
+
 @router.get("/total-sales")
 async def get_total_sales(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     store_id: Optional[int] = None
@@ -22,7 +162,7 @@ async def get_total_sales(
 
 @router.get("/total-gmv")
 async def get_total_gmv(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     store_id: Optional[int] = None
@@ -65,7 +205,7 @@ async def get_total_gmv(
 
 @router.get("/total-stores")
 async def get_total_stores(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ):
@@ -103,7 +243,7 @@ async def get_total_stores(
 
 @router.get("/monthly-data")
 async def get_monthly_data(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ):
@@ -212,7 +352,7 @@ async def get_monthly_data(
 
 @router.get("/gmv-by-dimension")
 async def get_gmv_by_dimension(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     dimension: str = "store",  # store, product, city
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,

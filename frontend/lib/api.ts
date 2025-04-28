@@ -1,11 +1,15 @@
 import { DateRange } from "react-day-picker";
+// Import the default export from the correct relative path
+import supabase from './supabase';
+import { Session } from '@supabase/supabase-js';
 
 // API 基础 URL
 export const API_BASE_URL = 'http://localhost:8000/api';
 
 export interface StoresInfo {
-  id: string;
-  name: string;
+  store_id: number;
+  store_name: string;
+  // Add other fields returned by the API if needed by the frontend
 }
 
 export interface GMVResponse {
@@ -46,24 +50,137 @@ export interface DimensionDataItem {
 }
 
 /**
+ * Helper function to make authenticated API requests.
+ * Retrieves the current session token and adds it to the Authorization header.
+ */
+export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  console.log("[fetchWithAuth] Attempting fetch:", url);
+
+  async function getSessionAndToken(): Promise<{ session: Session | null, token: string | null }> {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error("[fetchWithAuth] Error getting session:", sessionError);
+      throw new Error('Failed to get authentication session.');
+    }
+    return { session, token: session?.access_token || null };
+  }
+
+  let { session, token } = await getSessionAndToken();
+
+  console.log("[fetchWithAuth] Initial session exists:", !!session);
+  console.log("[fetchWithAuth] Initial token exists:", !!token);
+
+  if (!session || !token) {
+    console.warn("[fetchWithAuth] No active session or token found initially.");
+    throw new Error('User is not authenticated.'); // Force error if no initial session
+  }
+
+  const headers = new Headers(options.headers);
+
+  function setAuthHeader(currentToken: string) {
+    headers.set('Authorization', `Bearer ${currentToken}`);
+    console.log("[fetchWithAuth] Set Authorization header.");
+  }
+
+  setAuthHeader(token);
+
+  // Ensure common headers are present
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+  if (options.method && ['POST', 'PUT', 'PATCH'].includes(options.method.toUpperCase()) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  // Add timeout logic using AbortController
+  const controller = new AbortController();
+  // Use provided signal's timeout or default 30s
+  const timeoutDuration = options.signal?.aborted ? 0 : 30000; 
+  const timeoutId = timeoutDuration > 0 ? setTimeout(() => {
+    console.warn(`fetchWithAuth: Request to ${url} timed out after ${timeoutDuration}ms.`);
+    controller.abort();
+  }, timeoutDuration) : null;
+
+  try {
+    console.log(`[fetchWithAuth] Making request to ${url}...`);
+    let response = await fetch(url, {
+      ...options,
+      headers: headers,
+      // Use the abort controller signal. If options already has one, prioritize it?
+      // For simplicity, using our controller here.
+      signal: controller.signal 
+    });
+
+    if (timeoutId) clearTimeout(timeoutId); // Clear timeout if request completes
+
+    // Optional: Check for 401 specifically and maybe trigger sign-out
+    if (response.status === 401) {
+      console.warn("[fetchWithAuth] Received 401 Unauthorized. Attempting token refresh...");
+      try {
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          console.error("[fetchWithAuth] Error refreshing session:", refreshError);
+          throw new Error("Session refresh failed, user needs to re-login.");
+        }
+
+        // Get the new session and token
+        const { session: newSession, token: newToken } = await getSessionAndToken();
+
+        if (!newSession || !newToken) {
+          console.error("[fetchWithAuth] No session or token after successful refresh call.");
+          throw new Error("Session unavailable after refresh, user needs to re-login.");
+        }
+
+        console.log("[fetchWithAuth] Session refreshed successfully. Retrying request...");
+        token = newToken; // Update token for potential future use in this scope (though unlikely needed)
+        setAuthHeader(newToken); // Update header with the new token
+
+        // Retry the request with the new token
+        response = await fetch(url, { ...options, headers: headers, signal: controller.signal });
+
+        // Check status again after retry
+        if (response.status === 401) {
+          console.error("[fetchWithAuth] Received 401 Unauthorized even after refresh.");
+          throw new Error("Authentication failed after token refresh.");
+        }
+
+      } catch (refreshOrRetryError) {
+        console.error("[fetchWithAuth] Error during token refresh or retry:", refreshOrRetryError);
+        // Here you might want to trigger a sign-out and redirect to login
+        // Example: supabase.auth.signOut().then(() => window.location.href = '/login');
+        throw refreshOrRetryError; // Re-throw the error to be caught by the outer catch block
+      }
+    }
+
+    return response;
+  } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId); // Ensure timeout is cleared on error too
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error(`fetchWithAuth: Request to ${url} failed: Request timed out or aborted.`);
+    } else {
+      console.error(`fetchWithAuth: Request to ${url} failed:`, error);
+    }
+    // Re-throw the error so the calling function can handle it
+    throw error;
+  }
+}
+
+/**
  * 格式化日期为ISO格式的日期字符串 (YYYY-MM-DD)，避免时区问题
  */
 function formatDateToISOString(date: Date): string {
-  // return date.toISOString().split('T')[0]; // 可能受时区影响
-
-  // 手动构建 YYYY-MM-DD 格式，避免时区转换问题
   const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0'); // 月份从0开始，需要+1
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
-  
+
   return `${year}-${month}-${day}`;
 }
 
 function getMonthRange(date: Date): { start: Date; end: Date } {
   const year = date.getFullYear();
   const month = date.getMonth();
-  const start = new Date(year, month, 1); // 月初
-  const end = new Date(year, month + 1, 0); // 月末
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
   return { start, end };
 }
 
@@ -77,7 +194,6 @@ function getMonthRange(date: Date): { start: Date; end: Date } {
 export async function fetchTotalGMV(from?: Date, to?: Date, storeId?: string): Promise<GMVResponse> {
   try {
     console.log("API: 开始获取GMV数据，日期范围:", { from, to, storeId });
-
     const params = new URLSearchParams();
 
     if (from) {
@@ -103,34 +219,28 @@ export async function fetchTotalGMV(from?: Date, to?: Date, storeId?: string): P
     const url = `${API_BASE_URL}/metrics/total-gmv${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(url, {
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
+      headers: { // fetchWithAuth will add Authorization, keep other specific headers if needed
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache'
-      },
-      signal: controller.signal
+      }
+      // Timeout is handled within fetchWithAuth
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      // fetchWithAuth might have already logged 401, but we can add specific error context here
+      const errorText = await response.text().catch(() => `Status: ${response.status}`);
+      throw new Error(`API request failed for fetchTotalGMV: ${errorText}`);
     }
 
     const data: GMVResponse = await response.json();
     console.log("API: 获取到GMV数据:", data);
     return data;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('API: 获取GMV数据失败: Request timed out');
-    } else {
-      console.error('API: 获取GMV数据失败:', error);
-    }
+    // Error logging is handled in fetchWithAuth, but add specific context
+    console.error('API: 获取GMV数据最终失败:', error);
     return {
       total_gmv: 0,
       pop_percentage: 0,
@@ -150,7 +260,6 @@ export async function fetchTotalGMV(from?: Date, to?: Date, storeId?: string): P
 export async function fetchTotalSales(from?: Date, to?: Date, storeId?: string): Promise<SalesResponse> {
   try {
     console.log("API: 开始获取总销售额数据，日期范围:", { from, to, storeId });
-
     const params = new URLSearchParams();
 
     if (from) {
@@ -176,34 +285,25 @@ export async function fetchTotalSales(from?: Date, to?: Date, storeId?: string):
     const url = `${API_BASE_URL}/metrics/total-sales${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(url, {
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
+      headers: { // fetchWithAuth will add Authorization, keep other specific headers if needed
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache'
-      },
-      signal: controller.signal
+      }
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchTotalSales: ${errorText}`);
     }
 
     const data: SalesResponse = await response.json();
     console.log("API: 获取到总销售额数据:", data);
     return data;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('API: 获取总销售额数据失败: Request timed out');
-    } else {
-      console.error('API: 获取总销售额数据失败:', error);
-    }
+    console.error('API: 获取总销售额数据最终失败:', error);
     return {
       total_sales: 0,
       pop_percentage: 0,
@@ -222,7 +322,6 @@ export async function fetchTotalSales(from?: Date, to?: Date, storeId?: string):
 export async function fetchMonthlyData(from?: Date, to?: Date): Promise<MonthlyDataItem[]> {
   try {
     console.log("API: 开始获取月度GMV和销售数据，日期范围:", { from, to });
-
     const params = new URLSearchParams();
 
     if (from) {
@@ -240,21 +339,12 @@ export async function fetchMonthlyData(from?: Date, to?: Date): Promise<MonthlyD
     const url = `${API_BASE_URL}/metrics/monthly-data${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      },
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchMonthlyData: ${errorText}`);
     }
 
     const data = await response.json();
@@ -266,8 +356,7 @@ export async function fetchMonthlyData(from?: Date, to?: Date): Promise<MonthlyD
 
     return data as MonthlyDataItem[];
   } catch (error) {
-    console.error('API: 获取月度数据失败:', error);
-    // 返回空数组，由调用方决定是否使用默认数据
+    console.error('API: 获取月度数据最终失败:', error);
     return [];
   }
 }
@@ -281,7 +370,6 @@ export async function fetchMonthlyData(from?: Date, to?: Date): Promise<MonthlyD
 export async function fetchTotalStores(from?: Date, to?: Date): Promise<StoresResponse> {
   try {
     console.log("API: 开始获取总店铺数量数据，日期范围:", { from, to });
-
     const params = new URLSearchParams();
 
     if (from) {
@@ -299,28 +387,19 @@ export async function fetchTotalStores(from?: Date, to?: Date): Promise<StoresRe
     const url = `${API_BASE_URL}/metrics/total-stores${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      },
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchTotalStores: ${errorText}`);
     }
 
     const data: StoresResponse = await response.json();
     console.log("API: 获取到总店铺数量数据:", data);
     return data;
   } catch (error) {
-    console.error('API: 获取总店铺数量数据失败:', error);
+    console.error('API: 获取总店铺数量数据最终失败:', error);
     return {
       total_stores: 0,
       added: 0,
@@ -348,7 +427,6 @@ export async function fetchGMVByDimension(
 ): Promise<DimensionDataItem[]> {
   try {
     console.log(`API: 开始获取按${dimension}维度的GMV数据，日期范围:`, { from, to });
-
     const params = new URLSearchParams();
     params.append('dimension', dimension);
 
@@ -371,21 +449,12 @@ export async function fetchGMVByDimension(
     const url = `${API_BASE_URL}/metrics/gmv-by-dimension${params.toString() ? '?' + params.toString() : ''}`;
     console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
-      },
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchGMVByDimension (${dimension}): ${errorText}`);
     }
 
     const data = await response.json();
@@ -397,8 +466,7 @@ export async function fetchGMVByDimension(
 
     return data as DimensionDataItem[];
   } catch (error) {
-    console.error(`API: 获取按${dimension}维度的GMV数据失败:`, error);
-    // 返回空数组，由调用方决定是否使用默认数据
+    console.error(`API: 获取按${dimension}维度的GMV数据最终失败:`, error);
     return [];
   }
 }
@@ -409,6 +477,7 @@ export async function fetchGMVByDimension(
  */
 export async function testApiConnection(): Promise<boolean> {
   try {
+    // No auth needed for root usually
     const response = await fetch(`${API_BASE_URL}/`);
     return response.ok;
   } catch (error) {
@@ -420,28 +489,31 @@ export async function testApiConnection(): Promise<boolean> {
 
 /**
  * 获取所有店铺数据
- * @returns 店铺数据数组
+ * @returns 店铺数据数组 (matching StoresInfo)
  */
 export async function fetchStores(): Promise<StoresInfo[]> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-  const response = await fetch(`${API_BASE_URL}/info/stores`, {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
-    signal: controller.signal
-  });
+  try {
+      const url = `${API_BASE_URL}/info/stores`;
+      console.log("API: 请求URL (fetchStores):", url);
 
-  clearTimeout(timeoutId);
-  if (!response.ok) {
-    throw new Error('Failed to fetch stores');
-  }
+      // Use fetchWithAuth
+      const response = await fetchWithAuth(url, { method: 'GET' });
 
-  const data: StoresInfo[] = await response.json();
-  console.log("API: 获取到所有店铺数据:", data);
-  return data;
+      if (!response.ok) {
+         const errorText = await response.text().catch(() => `Status: ${response.status}`);
+         throw new Error(`API request failed for fetchStores: ${errorText}`);
+      }
+
+      // Backend returns data matching StoreResponse (which likely has store_id, store_name)
+      // Ensure the parsing matches the StoresInfo interface here
+      const data: StoresInfo[] = await response.json(); 
+      console.log("API: 获取到所有店铺数据:", data);
+      return data;
+   } catch (error) {
+      console.error("API: 获取店铺数据最终失败:", error);
+      throw error; // Re-throw so the caller knows it failed
+   }
 }
-
-// ... existing imports and code ...
 
 export interface InventoryStats {
   totalQuantity: number;
@@ -475,9 +547,10 @@ export interface InventoryRecord {
 }
 
 export interface Product {
-  id: string;
+  id: number;
   name: string;
   code: string;
+  price?: number;
 }
 
 export async function fetchInventoryStatistics(storeId?: string): Promise<InventoryStatisticsResponse> {
@@ -487,30 +560,23 @@ export async function fetchInventoryStatistics(storeId?: string): Promise<Invent
       params.append('store_id', storeId);
     }
     const url = `${API_BASE_URL}/inventory/statistics${params.toString() ? '?' + params.toString() : ''}`;
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+    console.log("API: 请求URL:", url);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal // 关联 AbortController
-    });
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
-    clearTimeout(timeoutId); // 清除超时
-
-    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+    if (!response.ok) {
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchInventoryStatistics: ${errorText}`);
+    }
     const data = await response.json();
     return data;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Error fetching inventory statistics: Request timed out');
-    } else {
-      console.error('Error fetching inventory statistics:', error);
-    }
-    return { 
-      sample: { totalQuantity: 0, skuDetails: [] }, 
-      stock: { totalQuantity: 0, skuDetails: [] } 
+    console.error('API: 获取库存统计数据最终失败:', error);
+    // Return default error state consistent with original logic
+    return {
+      sample: { totalQuantity: 0, skuDetails: [] },
+      stock: { totalQuantity: 0, skuDetails: [] }
     };
   }
 }
@@ -522,26 +588,18 @@ export async function fetchInventoryDistribution(storeId?: string): Promise<Dist
       params.append('store_id', storeId);
     }
     const url = `${API_BASE_URL}/inventory/distribution${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal // 关联 AbortController
-    });
-
-    clearTimeout(timeoutId); // 清除超时
-
-    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+    if (!response.ok) {
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchInventoryDistribution: ${errorText}`);
+    }
     return response.json();
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Error fetching inventory distribution: Request timed out');
-    } else {
-      console.error('Error fetching inventory distribution:', error);
-    }
+    console.error('API: 获取库存分布数据最终失败:', error);
     return [];
   }
 }
@@ -558,32 +616,26 @@ export async function fetchInventoryRecords(storeId?: string, startDate?: Date, 
     if (endDate) {
       params.append('end_date', formatDateToISOString(endDate));
     }
+
     const url = `${API_BASE_URL}/inventory/records${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal // 关联 AbortController
-    });
-
-    clearTimeout(timeoutId); // 清除超时
-
-    if (!response.ok) throw new Error(`API request failed fetching records: ${response.status}`);
+    if (!response.ok) {
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchInventoryRecords: ${errorText}`);
+    }
     const data = await response.json();
 
+    // Keep the mapping logic
     return data.map((record: any) => ({
       ...record,
       type: record.is_sample === true ? 'sample' : 'stock',
     }));
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Error fetching inventory records: Request timed out');
-    } else {
-      console.error('Error fetching inventory records:', error);
-    }
+    console.error('API: 获取库存记录最终失败:', error);
     return [];
   }
 }
@@ -598,38 +650,48 @@ export async function addInventoryRecords(records: Omit<InventoryRecord, 'id' | 
     };
   });
   console.log("API: Sending inventory records (backend format):", recordsToSend);
-  const response = await fetch(`${API_BASE_URL}/inventory/records`, {
+
+  const url = `${API_BASE_URL}/inventory/records`;
+  console.log("API: 请求URL:", url);
+
+  // Use fetchWithAuth for POST
+  const response = await fetchWithAuth(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
     body: JSON.stringify(recordsToSend),
+    // Content-Type will be added by fetchWithAuth if needed
   });
-  if (!response.ok) throw new Error(`API request failed adding records: ${response.status}`);
+
+  if (!response.ok) {
+     const errorText = await response.text().catch(() => `Status: ${response.status}`);
+     throw new Error(`API request failed for addInventoryRecords: ${errorText}`);
+  }
+  // No content expected on success typically
 }
 
 export async function fetchProducts(): Promise<Product[]> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+    const url = `${API_BASE_URL}/info/products`;
+    console.log("API: 请求URL (fetchProducts):", url);
 
-    const response = await fetch(`${API_BASE_URL}/info/products`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal // 关联 AbortController
-    });
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
-    clearTimeout(timeoutId); // 清除超时
-
-    if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-    return response.json();
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Error fetching products: Request timed out');
-    } else {
-      console.error('Error fetching products:', error);
+    if (!response.ok) {
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchProducts: ${errorText}`);
     }
+    
+    const data = await response.json(); 
+    // Align with the actual fields returned by the API: id, name, code
+    const products: Product[] = data.map((p: any) => ({
+        id: p.id, // Changed from p.product_id to p.id
+        name: p.name, // Changed from p.sku_name to p.name
+        code: p.code, // Changed from p.sku_code to p.code
+        price: p.price 
+    }));
+    console.log("API: Fetched Products:", products);
+    return products;
+  } catch (error) {
+    console.error('API: 获取产品数据最终失败:', error);
     return [];
   }
 }
@@ -641,26 +703,29 @@ export async function updateInventoryRecord(recordId: string, recordData: Partia
   if (type !== undefined) {
       dataToSend.is_sample = type === 'sample';
   }
-  if (dataToSend.inventory_date instanceof Date) {
+  if ('inventory_date' in dataToSend && dataToSend.inventory_date instanceof Date) {
     dataToSend.inventory_date = formatDateToISOString(dataToSend.inventory_date);
   }
 
   console.log(`API: Sending update for record ${recordId} (backend format):`, dataToSend);
-  const response = await fetch(`${API_BASE_URL}/inventory/records/${recordId}`, {
+
+  const url = `${API_BASE_URL}/inventory/records/${recordId}`;
+  console.log("API: 请求URL:", url);
+
+  // Use fetchWithAuth for PATCH
+  const response = await fetchWithAuth(url, {
       method: 'PATCH',
-      headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-      },
       body: JSON.stringify(dataToSend),
+      // Content-Type will be added by fetchWithAuth
   });
 
   if (!response.ok) {
-      const errorBody = await response.text();
+      const errorBody = await response.text().catch(()=> `Status: ${response.status}`);
       console.error('API Error Body:', errorBody);
-      throw new Error(`API request failed updating record ${recordId}: ${response.status}`);
+      throw new Error(`API request failed updating record ${recordId}: ${errorBody}`);
   }
   const updatedRecord = await response.json();
+  // Keep mapping logic
   return {
       ...updatedRecord,
       type: updatedRecord.is_sample === true ? 'sample' : 'stock',
@@ -703,40 +768,33 @@ export async function fetchSettlementRecords(storeId?: string, startDate?: Date,
     if (endDate) {
       params.append('end_date', formatDateToISOString(endDate));
     }
+
     const url = `${API_BASE_URL}/settlement/records${params.toString() ? '?' + params.toString() : ''}`;
+    console.log("API: 请求URL:", url);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    // Use fetchWithAuth
+    const response = await fetchWithAuth(url, { method: 'GET' });
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
+    if (!response.ok) {
+       const errorText = await response.text().catch(() => `Status: ${response.status}`);
+       throw new Error(`API request failed for fetchSettlementRecords: ${errorText}`);
+    }
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) throw new Error(`API request failed fetching records: ${response.status}`);
-    
     const data = await response.json();
-    
-    // 格式化返回的数据，确保字段符合前端期望
+
+    // Keep the mapping logic
     return data.map((record: any) => ({
       id: `STL-${record.settlement_id}`,
       settle_date: record.settle_date,
       store: record.store,
-      store_id: record.store_id,
+      store_id: record.store_id, // Ensure backend provides this if needed
       total_amount: record.total_amount,
       remarks: record.remarks,
       created_by: record.created_by,
       items: record.items || []
     }));
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Error fetching settlement records: Request timed out');
-    } else {
-      console.error('Error fetching settlement records:', error);
-    }
+    console.error('API: 获取结算记录最终失败:', error);
     return [];
   }
 }

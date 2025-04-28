@@ -11,6 +11,7 @@ import { API_BASE_URL } from "@/lib/api";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Loading } from "@/components/ui/loading";
 import { formatDateToISOString } from "@/lib/utils";
+import supabase from '@/lib/supabase';
 
 // 自定义 XAxis Tick 组件以实现双行展示
 const CustomTick = (props: any) => {
@@ -86,6 +87,22 @@ const chartConfig = {
   },
 };
 
+// --- Temporarily define fetchWithAuth here for quick fix --- 
+// --- Ideally, import from lib/api.ts after exporting it --- 
+async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+    console.log("fetchWithAuth (Chart): Attempting fetch for URL:", url);
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers = new Headers(options.headers);
+    if (session?.access_token) {
+        console.log("fetchWithAuth (Chart): Adding Authorization header.");
+        headers.set('Authorization', `Bearer ${session.access_token}`);
+    }
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    // Simplified version for GET
+    return fetch(url, { ...options, headers });
+}
+// --- End Temporary fetchWithAuth ---
+
 export function SettlementProductChart() {
   const { viewMode, storeId } = useSettlementView();
   const { dateRange } = useDateRange();
@@ -125,7 +142,8 @@ export function SettlementProductChart() {
 
       const url = `${API_BASE_URL}/settlement/products?${params.toString()}`;
       console.log("ProductChart: Fetching URL:", url);
-      const response = await fetch(url);
+      // Use fetchWithAuth instead of plain fetch
+      const response = await fetchWithAuth(url, { method: 'GET' });
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to fetch product data: ${response.status} ${errorText}`);

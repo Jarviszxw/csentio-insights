@@ -35,7 +35,7 @@ import { Select as ShadcnSelect, SelectContent, SelectItem, SelectTrigger, Selec
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { InventoryViewContext } from './inventory-filter';
-import { fetchInventoryRecords, addInventoryRecords, fetchProducts, InventoryRecord, updateInventoryRecord, Product } from '@/lib/api';
+import { fetchInventoryRecords, addInventoryRecords, fetchProducts, InventoryRecord, updateInventoryRecord, Product as ApiProduct, StoresInfo } from '@/lib/api';
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,7 +44,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
 interface ProductSelection {
-  productId: string;
+  productId: number;
   skuName: string;
   skuCode: string;
   quantity: number;
@@ -58,8 +58,8 @@ interface SelectOption {
 
 interface EditFormState {
   inventory_date?: Date;
-  store?: string;
-  productId?: string;
+  store_id?: number;
+  productId?: number;
   skuName?: string;
   skuCode?: string;
   quantity?: number;
@@ -78,11 +78,21 @@ interface ShipmentGroupSummary {
   hasSample: boolean;
 }
 
+type Product = ApiProduct;
+
+type Store = StoresInfo;
+
 export function InventoryRecordsTable() {
   const queryClient = useQueryClient();
   const { storeId, stores, isLoading: storesLoading } = React.useContext(InventoryViewContext);
 
-  const filteredStores = Array.isArray(stores) ? stores.filter((s) => s.id !== 'all') : [];
+  React.useEffect(() => {
+    console.log("[InventoryTable] Stores received from context:", JSON.stringify(stores));
+    console.log("[InventoryTable] Is stores loading:", storesLoading);
+    console.log("[InventoryTable] Current storeId filter:", storeId);
+  }, [stores, storesLoading, storeId]);
+
+  const filteredStores = Array.isArray(stores) ? stores : [];
 
   const { data: records = [], isLoading: recordsLoading } = useQuery<InventoryRecord[]>({
     queryKey: ['inventoryRecords', storeId],
@@ -92,6 +102,10 @@ export function InventoryRecordsTable() {
   const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ['products'],
     queryFn: fetchProducts,
+    select: (data) => {
+      // Remove the filtering logic since the API should return valid data
+      return data.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }
   });
 
   const addMutation = useMutation({
@@ -125,7 +139,7 @@ export function InventoryRecordsTable() {
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [selectedRecord, setSelectedRecord] = React.useState<InventoryRecord | null>(null);
-  const [productSelections, setProductSelections] = React.useState<ProductSelection[]>([{ productId: '', skuName: '', skuCode: '', quantity: 1, type: 'stock' }]);
+  const [productSelections, setProductSelections] = React.useState<ProductSelection[]>([{ productId: 0, skuName: '', skuCode: '', quantity: 1, type: 'stock' }]);
   const [addInventoryDate, setAddInventoryDate] = React.useState<Date | undefined>(new Date());
   const [isAddDatePickerOpen, setIsAddDatePickerOpen] = React.useState(false);
   const [addStore, setAddStore] = React.useState<string>('');
@@ -192,16 +206,26 @@ export function InventoryRecordsTable() {
   const currentGroups = shipmentGroups.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const productsMap = React.useMemo(() => {
-      return products.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<string, Product>);
+      if (!products) return {};
+      return products.reduce((acc, p) => { acc[p.id] = p; return acc; }, {} as Record<number, Product>);
   }, [products]);
 
+  const currentEditStateRef = React.useRef(editFormState);
   React.useEffect(() => {
-    if (selectedRecord && products.length > 0) {
-        const product = products.find(p => p.code === selectedRecord.skuCode);
-        const initialState = {
+    currentEditStateRef.current = editFormState;
+  }, [editFormState]);
+
+  React.useEffect(() => {
+    if (selectedRecord) {
+        console.log("[InventoryTable Edit Effect] Running for record:", selectedRecord.id);
+
+        const product = products?.find(p => p.code === selectedRecord.skuCode);
+        const store = stores?.find(s => s.store_name === selectedRecord.store);
+
+        const initialState: EditFormState = {
             inventory_date: new Date(selectedRecord.inventory_date),
-            store: selectedRecord.store || '',
-            productId: product?.id || '',
+            store_id: store?.store_id,
+            productId: product?.id !== undefined ? product.id : undefined,
             skuName: selectedRecord.skuName,
             skuCode: selectedRecord.skuCode,
             quantity: selectedRecord.quantity,
@@ -209,22 +233,27 @@ export function InventoryRecordsTable() {
             remarks: selectedRecord.remarks || '',
             trackingNo: selectedRecord.trackingNo || '',
         };
-        if (JSON.stringify(initialState) !== JSON.stringify(editFormState)) {
-             setEditFormState(initialState);
+        console.log("[InventoryTable Edit Effect] Calculated initialState:", initialState);
+
+        if (JSON.stringify(initialState) !== JSON.stringify(currentEditStateRef.current)) {
+          console.log("[InventoryTable Edit Effect] Updating editFormState.");
+          setEditFormState(initialState);
         }
+
     } else {
-        if (!selectedRecord && Object.keys(editFormState).length > 0) {
-             setEditFormState({});
+        if (Object.keys(currentEditStateRef.current).length > 0) {
+          console.log("[InventoryTable Edit Effect] No selected record, clearing form state.");
+          setEditFormState({});
         }
     }
-  }, [selectedRecord, products]);
+  }, [selectedRecord, products, stores]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
 
   const handleAddProductSelection = () => {
-    setProductSelections([...productSelections, { productId: '', skuName: '', skuCode: '', quantity: 1, type: 'stock' }]);
+    setProductSelections([...productSelections, { productId: 0, skuName: '', skuCode: '', quantity: 1, type: 'stock' }]);
   };
 
   const handleRemoveProductSelection = (index: number) => {
@@ -232,15 +261,34 @@ export function InventoryRecordsTable() {
     setProductSelections(productSelections.filter((_, i) => i !== index));
   };
 
-  const handleAddProductChange = (index: number, selectedProductId: string) => {
+  const handleAddProductChange = (index: number, selectedProductId: number) => {
     const newSelections = [...productSelections];
-    const product = productsMap[selectedProductId];
-    newSelections[index] = {
-      ...newSelections[index],
-      productId: selectedProductId,
-      skuName: product?.name || '',
-      skuCode: product?.code || '',
-    };
+    if (selectedProductId) {
+      const product = productsMap[selectedProductId];
+      if (product) {
+        newSelections[index] = {
+          ...newSelections[index],
+          productId: selectedProductId,
+          skuName: product.name || '',
+          skuCode: product.code || '',
+        };
+      } else {
+        console.warn(`Inventory: Product with ID ${selectedProductId} not found in productsMap`);
+        newSelections[index] = {
+          ...newSelections[index],
+          productId: selectedProductId,
+          skuName: `Unknown Product (${selectedProductId})`,
+          skuCode: '',
+        };
+      }
+    } else {
+      newSelections[index] = {
+        ...newSelections[index],
+        productId: 0,
+        skuName: '',
+        skuCode: '',
+      };
+    }
     setProductSelections(newSelections);
   };
 
@@ -262,10 +310,16 @@ export function InventoryRecordsTable() {
         alert("Please select a store.");
         return;
     }
+    const selectedStore = stores.find(s => String(s.store_id) === addStore);
+    if (!selectedStore) {
+        alert("Selected store not found.");
+        return;
+    }
+
     const newRecords = productSelections
       .filter((ps) => ps.productId && ps.quantity >= 1)
       .map((ps) => ({
-        store: addStore,
+        store: selectedStore.store_name,
         skuName: ps.skuName,
         skuCode: ps.skuCode,
         quantity: ps.quantity,
@@ -287,19 +341,38 @@ export function InventoryRecordsTable() {
       setEditFormState(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleEditProductChange = (selectedProductId: string) => {
+  const handleEditProductChange = (selectedProductId: number) => {
+    if (selectedProductId) {
       const product = productsMap[selectedProductId];
-      setEditFormState(prev => ({
+      if (product) {
+        setEditFormState(prev => ({
           ...prev,
           productId: selectedProductId,
-          skuName: product?.name || '',
-          skuCode: product?.code || '',
+          skuName: product.name || '',
+          skuCode: product.code || '',
+        }));
+      } else {
+        console.warn(`Inventory Edit: Product with ID ${selectedProductId} not found in productsMap`);
+        setEditFormState(prev => ({
+          ...prev,
+          productId: selectedProductId,
+          skuName: `Unknown Product (${selectedProductId})`,
+          skuCode: '',
+        }));
+      }
+    } else {
+      setEditFormState(prev => ({
+        ...prev,
+        productId: undefined,
+        skuName: '',
+        skuCode: '',
       }));
+    }
   };
 
   const handleUpdateRecord = () => {
       if (!selectedRecord) return;
-      if (!editFormState.productId) {
+      if (!editFormState.productId || !editFormState.skuCode) {
           alert("Please select a product.");
           return;
       }
@@ -307,13 +380,19 @@ export function InventoryRecordsTable() {
           alert("Please enter a valid quantity (0 or greater).");
           return;
       }
-       if (!editFormState.store) {
+       if (editFormState.store_id === undefined) {
           alert("Please select a store.");
           return;
       }
 
-      const dataForApi: Partial<Omit<InventoryRecord, 'id' | 'createTime' | 'is_sample'> & { inventory_date?: string }> = {
-          store: editFormState.store,
+      const selectedStore = stores.find(s => s.store_id === editFormState.store_id);
+      if (!selectedStore) {
+         alert("Selected store not found for update.");
+         return;
+      }
+
+      const dataForApi: Partial<Omit<InventoryRecord, 'id' | 'createTime' | 'is_sample'> & { inventory_date?: string, store_id?: number }> = {
+          store: selectedStore.store_name,
           skuName: editFormState.skuName,
           skuCode: editFormState.skuCode,
           quantity: editFormState.quantity,
@@ -336,9 +415,9 @@ export function InventoryRecordsTable() {
   };
 
   const openAddDialog = () => {
-      setProductSelections([{ productId: '', skuName: '', skuCode: '', quantity: 1, type: 'stock' }]);
-      const defaultStore = storeId === 'all' ? filteredStores.find(s => s.id !== 'all')?.id || '' : storeId;
-      setAddStore(defaultStore);
+      setProductSelections([{ productId: 0, skuName: '', skuCode: '', quantity: 1, type: 'stock' }]);
+      const defaultStoreId = storeId === 'all' ? (filteredStores.length > 0 ? String(filteredStores[0].store_id) : '') : storeId;
+      setAddStore(defaultStoreId);
       setAddRemarks('');
       setAddTrackingNo('');
       setAddInventoryDate(new Date());
@@ -611,16 +690,23 @@ export function InventoryRecordsTable() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="add_store">Store</Label>
-                <ShadcnSelect value={addStore} onValueChange={setAddStore} disabled={storesLoading || storeId !== 'all'}>
+                <ShadcnSelect 
+                  value={addStore || ''}
+                  onValueChange={setAddStore} 
+                  disabled={storesLoading || (storeId !== 'all' && !!storeId)}
+                >
                   <SelectTrigger id="add_store">
                     <SelectValue placeholder={storesLoading ? "Loading..." : "Select store"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredStores.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
+                    {Array.isArray(stores) && stores.map((s) => {
+                      if (!s || s.store_id === null || s.store_id === undefined) return null;
+                      return (
+                        <SelectItem key={s.store_id} value={String(s.store_id)}>
+                          {s.store_name}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </ShadcnSelect>
               </div>
@@ -652,8 +738,8 @@ export function InventoryRecordsTable() {
                   productSelections.map((selection, index) => (
                     <div key={index} className="flex items-center gap-2">
                       <ShadcnSelect
-                         value={selection.productId}
-                        onValueChange={(value) => handleAddProductChange(index, value)}
+                         value={selection.productId ? String(selection.productId) : ''}
+                        onValueChange={(value) => handleAddProductChange(index, Number(value))}
                         disabled={productsLoading}
                       >
                         <SelectTrigger className="flex-grow min-w-[150px] py-2 pl-3 pr-2 text-left min-h-12">
@@ -669,14 +755,20 @@ export function InventoryRecordsTable() {
                            </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                           {products.map((product: Product) => (
-                             <SelectItem key={product.id} value={String(product.id)}>
-                               <div>
-                                 {product.name}
-                                 <div className="text-xs text-muted-foreground">{product.code}</div>
-                               </div>
-                             </SelectItem>
-                           ))}
+                           {products.map((product: Product) => {
+                             if (!product || product.id === null || product.id === undefined || isNaN(Number(product.id))) {
+                               console.warn("Inventory: Skipping rendering SelectItem for invalid product:", product);
+                               return null;
+                             }
+                             return (
+                               <SelectItem key={product.id} value={String(product.id)}>
+                                 <div>
+                                   {product.name}
+                                   <div className="text-xs text-muted-foreground">{product.code}</div>
+                                 </div>
+                               </SelectItem>
+                             );
+                           })}
                          </SelectContent>
                       </ShadcnSelect>
 
@@ -803,10 +895,9 @@ export function InventoryRecordsTable() {
                   <div className="space-y-2">
                     <Label htmlFor="edit_store">Store</Label>
                     <ShadcnSelect
-                        value={stores.find(s => s.name === editFormState.store)?.id || ''}
-                        onValueChange={(storeId) => {
-                            const storeName = stores.find(s => s.id === storeId)?.name;
-                            handleEditInputChange('store', storeName || '');
+                        value={editFormState.store_id !== undefined ? String(editFormState.store_id) : ''}
+                        onValueChange={(value) => {
+                            handleEditInputChange('store_id', value ? Number(value) : undefined);
                         }}
                         disabled={storesLoading}
                     >
@@ -814,11 +905,14 @@ export function InventoryRecordsTable() {
                         <SelectValue placeholder={storesLoading ? "Loading..." : "Select store"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {stores.filter(s => s.id !== 'all').map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
+                        {Array.isArray(stores) && stores.map((s) => {
+                          if (!s || s.store_id === null || s.store_id === undefined) return null;
+                          return (
+                            <SelectItem key={s.store_id} value={String(s.store_id)}>
+                              {s.store_name}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </ShadcnSelect>
                   </div>
@@ -828,8 +922,8 @@ export function InventoryRecordsTable() {
                   <div className="space-y-3">
                     <Label htmlFor="edit_product">Inventory Item</Label>
                     <ShadcnSelect
-                      value={editFormState.productId || ''}
-                      onValueChange={handleEditProductChange}
+                      value={editFormState.productId ? String(editFormState.productId) : ''}
+                      onValueChange={(value) => handleEditProductChange(Number(value))}
                       disabled={productsLoading}
                     >
                       <SelectTrigger id="edit_product" className="py-2 pl-3 pr-2 text-left h-12 min-h-12 w-[310px]">
@@ -843,14 +937,20 @@ export function InventoryRecordsTable() {
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                         {products.map((product: Product) => (
-                           <SelectItem key={product.id} value={String(product.id)}>
-                             <div>
-                               {product.name}
-                               <div className="text-xs text-muted-foreground">{product.code}</div>
-                             </div>
-                           </SelectItem>
-                         ))}
+                         {products.map((product: Product) => {
+                           if (!product || product.id === null || product.id === undefined || isNaN(Number(product.id))) {
+                             console.warn("Inventory: Skipping rendering SelectItem for invalid product:", product);
+                             return null;
+                           }
+                           return (
+                             <SelectItem key={product.id} value={String(product.id)}>
+                               <div>
+                                 {product.name}
+                                 <div className="text-xs text-muted-foreground">{product.code}</div>
+                               </div>
+                             </SelectItem>
+                           );
+                         })}
                        </SelectContent>
                     </ShadcnSelect>
                   </div>

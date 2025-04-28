@@ -63,10 +63,21 @@ export function RegisterForm({ className, ...props }: React.HTMLAttributes<HTMLD
 
     setIsLoading(true)
     try {
+      // --- Prepare user metadata ---
+      const defaultRole = 'user'; // Define the default role for new users
+      const userMetadata = {
+        role: defaultRole,
+        // You could add other metadata here if needed from the form
+        // e.g., full_name: formData.fullName
+      };
+      // --- End Prepare user metadata ---
+
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
+          // --- Add user_metadata here ---
+          data: userMetadata,
           // Optional: Add email redirect URL if you have email confirmation enabled
           // emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -101,30 +112,24 @@ export function RegisterForm({ className, ...props }: React.HTMLAttributes<HTMLD
   }
 
   return (
-    <div className={cn("w-full lg:grid lg:min-h-screen lg:grid-cols-2", className)} {...props}>
-      {/* Left Column: Form */}
-      <div className="flex flex-col justify-center p-6 sm:p-12">
-         {/* Logo Header - Top-left, Larger, Fixed Size to prevent shift */}
-         <div className="absolute top-1 left-8 z-10"> {/* Adjusted top/left */} 
-            {/* Explicit width/height attrs + Tailwind size class */}
-            <Image 
-                src="/WW-1.png" 
-                alt="CSENTIŌ Logo" 
-                width={240} // Increased width attribute
-                height={96} // Increased height attribute (maintaining aspect ratio)
-                className="h-24 w-auto" // Tailwind class to control rendered size
-                priority // Prioritize loading this critical element
-             /> 
-         </div>
-
-        {/* Form Centering Container */}
-        <div className="mx-auto grid w-full max-w-[380px] gap-8 pt-24 lg:pt-0"> {/* Adjusted padding/gap */} 
-          <div className="grid gap-2 text-left">
-            <h2 className="text-3xl font-bold tracking-tight text-white text-center">
-              Create Your Account
-            </h2>
-          </div>
-          <form onSubmit={handleSubmit} className="grid gap-4" noValidate>
+    <div className={cn("w-full lg:grid h-screen lg:grid-cols-2 overflow-hidden", className)} {...props}>
+      {/* Left Column: Form - Use justify-center, reduced padding */}
+      <div className="flex flex-col justify-center p-6 sm:p-12 overflow-hidden"> {/* Reduced padding, removed overflow-y-auto */}
+         {/* Form Centering Container - Reduced gap */} 
+         <div className="mx-auto grid w-full max-w-[380px] gap-4"> {/* Reduced gap */} 
+            {/* Centered logo - Moderately reduced size and margin */} 
+            <div className="flex justify-center mb-3"> {/* Reduced mb */} 
+               <Image
+                 src="/WW-1.png"
+                 alt="CSENTIŌ Logo"
+                 width={260} // Reduced width slightly
+                 height={100} // Reduced height proportionally
+                 className="h-auto"
+                 priority
+               />
+            </div>
+            {/* Form */} 
+            <form onSubmit={handleSubmit} className="grid gap-3" noValidate> {/* Reduced gap */}
                <div className="grid gap-2">
                  <Label htmlFor="email" className="text-neutral-300">Email</Label> 
                  <Input
@@ -153,10 +158,10 @@ export function RegisterForm({ className, ...props }: React.HTMLAttributes<HTMLD
                   <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-[2.45rem] transform -translate-y-1/2 h-5 w-5 text-neutral-400 hover:text-neutral-200"
+                      className="absolute right-3 top-[2.45rem] transform -translate-y-1/2 h-2 w-5 text-neutral-400 hover:text-neutral-200"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {showPassword ? <EyeOff /> : <Eye />}
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                  </button>
                </div>
                 <div className="grid gap-2 relative">
@@ -174,10 +179,10 @@ export function RegisterForm({ className, ...props }: React.HTMLAttributes<HTMLD
                   <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-[2.45rem] transform -translate-y-1/2 h-5 w-5 text-neutral-400 hover:text-neutral-200"
+                      className="absolute right-3 top-[2.45rem] transform -translate-y-1/2 h-2 w-5 text-neutral-400 hover:text-neutral-200"
                       aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                     >
-                      {showConfirmPassword ? <EyeOff /> : <Eye />}
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                  </button>
                </div>
                <Button type="submit" className="w-full h-11 bg-white hover:bg-gray-200 text-black font-medium rounded-md mt-2" disabled={isLoading}>
@@ -192,24 +197,25 @@ export function RegisterForm({ className, ...props }: React.HTMLAttributes<HTMLD
                 </div>
           </form>
 
-           {/* Footer Added Here */}
-          <div className="mt-10 text-center text-xs text-neutral-500">
+           {/* Footer - Reduced top margin */} 
+          <div className="mt-6 text-center text-xs text-neutral-500"> {/* Reduced mt */} 
             <p>© 2025 CSENTIŌ. All Rights Reserved.</p>
             <p>Need help? Contact us at <a href="mailto:hello@csentio.com" className="underline text-neutral-400 hover:text-neutral-200">hello@csentio.com</a></p>
           </div>
 
         </div>
       </div>
-      {/* Right Column: Image - Simplifying styles for debugging */}
-      <div className="hidden lg:flex lg:items-center lg:justify-center bg-black p-6">
+
+      {/* Right Column: Image - Add inline styles for debugging */}
+      <div className="hidden lg:flex items-center justify-center bg-black p-0 h-full overflow-hidden">
         <Image
-          src="/WW-2.png" 
-          alt="CSENTIŌ Feature Logo"
-          width={300} // Using a smaller, fixed size for test
-          height={300}
-          // Temporarily removing className constraints
-          // className="h-auto max-h-[80vh] w-auto max-w-[90%] object-contain"
-          unoptimized={process.env.NODE_ENV === 'development'}
+          src="/CAMPAIGN_9.jpg"
+          alt="CSENTIŌ Campaign Image"
+          width={1920}
+          height={1080}
+          priority
+          className="h-full w-full object-cover"
+          style={{ height: '100%', width: '100%', objectFit: 'cover' }}
         />
       </div>
     </div>

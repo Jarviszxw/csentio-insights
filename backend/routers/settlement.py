@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from datetime import date
 from supabase import Client
-from db.database import get_supabase
+from dependencies import get_current_user_supabase_client
 # Use direct imports when running from project root with uvicorn
 from models.settlement import SettlementCreate, SettlementItemCreate, SettlementUpdate, SettlementResponse, SettlementRecord, SettlementProduct
 from services import settlement_service
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/settlement", tags=["settlement"])
 # --- Specific paths FIRST ---
 @router.get("/records", response_model=List[SettlementRecord])
 async def get_settlement_records(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     store_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
@@ -39,7 +39,7 @@ async def get_settlement_records(
 
 @router.get("/products", response_model=List[SettlementProduct])
 async def get_settlement_products(
-    supabase: Client = Depends(get_supabase),
+    supabase: Client = Depends(get_current_user_supabase_client),
     store_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
@@ -62,7 +62,7 @@ async def get_settlement_products(
 @router.post("/", status_code=201) # Use root path with prefix, define response_model if desired
 async def add_new_settlement(
     settlement_data: SettlementCreate,
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_current_user_supabase_client)
 ):
     """
     Adds a new settlement record along with its items.
@@ -93,7 +93,7 @@ async def add_new_settlement(
 @router.get("/{settlement_id}", response_model=SettlementResponse)
 async def get_settlement_details(
     settlement_id: int,
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_current_user_supabase_client)
 ):
     """
     Retrieves the details of a specific settlement, including its items and product info.
@@ -115,7 +115,7 @@ async def get_settlement_details(
 async def update_existing_settlement(
     settlement_id: int,
     settlement_data: SettlementUpdate, # Use the new Update model
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_current_user_supabase_client)
 ):
     """
     Updates an existing settlement record and its items.
@@ -138,3 +138,23 @@ async def update_existing_settlement(
     except Exception as e:
         logger.error(f"Unexpected error updating settlement {settlement_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error updating settlement.")
+
+# Add DELETE endpoint if needed, also using the new dependency
+# @router.delete("/{settlement_id}", status_code=204)
+# async def delete_settlement(
+#     settlement_id: int,
+#     supabase: Client = Depends(get_current_user_supabase_client)
+# ):
+#     logger.info(f"API Call DELETE /api/settlement/{settlement_id}")
+#     try:
+#         success = await settlement_service.delete_settlement(supabase, settlement_id)
+#         if not success:
+#              raise HTTPException(status_code=404, detail="Settlement not found")
+#         # No content to return on successful delete
+#         return None 
+#     except HTTPException as e:
+#        logger.warning(f"HTTPException deleting settlement {settlement_id}: {e.detail}")
+#        raise e
+#     except Exception as e:
+#         logger.error(f"Unexpected error deleting settlement {settlement_id}: {e}", exc_info=True)
+#         raise HTTPException(status_code=500, detail="Internal server error deleting settlement.")

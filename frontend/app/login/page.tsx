@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen w-full bg-black">
+    <div className="min-h-screen w-full" style={{ backgroundColor: "#0d0d0d" }}>
       <AuthForm />
     </div>
   )

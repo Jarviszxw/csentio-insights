@@ -23,7 +23,7 @@ class ProductResponse(BaseModel):
     id: int
     name: str
     code: str
-
+    price: Optional[float]
 class CityResponse(BaseModel):
     id: int
     name: str

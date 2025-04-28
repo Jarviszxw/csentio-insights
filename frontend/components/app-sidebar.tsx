@@ -35,37 +35,21 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 
-const data = {
-  user: {
-    name: "CSENTIŌ",
-    email: "m@csentio.com",
-    avatar: "/BW-2.png",
-  },
+// Define User type (can be shared or defined here)
+type User = { name?: string | null; email: string; avatar?: string | null };
+
+// Remove or comment out the hardcoded user data
+const hardcodedNavData = {
+  // user: { // Remove user part
+  //   name: "CSENTIŌ",
+  //   email: "m@csentio.com",
+  //   avatar: "/BW-2.png",
+  // },
   navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: IconDashboard,
-      isActive: true,
-    },
-    {
-      title: "Store",
-      url: "/store",
-      icon: IconChartBar,
-      isActive: false,
-    },
-    {
-      title: "Inventory",
-      url: "/inventory",
-      icon: IconDatabase,
-      isActive: true,
-    },
-    {
-      title: "Settlement",
-      url: "/settlement",
-      icon: IconFolder,
-      isActive: false,
-    },
+    { title: "Dashboard", url: "/dashboard", icon: IconDashboard, isActive: true },
+    { title: "Store", url: "/store", icon: IconChartBar, isActive: false },
+    { title: "Inventory", url: "/inventory", icon: IconDatabase, isActive: true },
+    { title: "Settlement", url: "/settlement", icon: IconFolder, isActive: false },
   ],
   navClouds: [
     {
@@ -115,12 +99,11 @@ const data = {
       ],
     },
   ],
-  navSecondary: [
-
-  ],
+  navSecondary: [],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+// Accept 'user' as a prop
+export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sidebar> & { user: User | null }) {
   // Initialize with a default value (false) to avoid SSR issues
   const [isDarkMode, setIsDarkMode] = React.useState(false);
 
@@ -175,11 +158,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={hardcodedNavData.navMain} />
+        <NavSecondary items={hardcodedNavData.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   );

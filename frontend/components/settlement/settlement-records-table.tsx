@@ -49,9 +49,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { EditSettlementDialog, SettlementUpdatePayload } from "./edit-settlement-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
-import { fetchSettlementRecords, SettlementRecord, SettlementItem } from "@/lib/api";
+import { fetchSettlementRecords, SettlementRecord, SettlementItem, fetchProducts as apiFetchProducts, StoresInfo, Product as ApiProduct } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { Separator } from "@/components/ui/separator";
+import { fetchWithAuth } from "@/lib/api";
 
 // Restore necessary local type definitions
 interface SettlementItemForm {
@@ -60,12 +61,11 @@ interface SettlementItemForm {
   unit_price?: number;
 }
 
-interface Product {
-  id: number;
-  name: string;
-  code: string;
-  price?: number;
-}
+// Use Product type from lib/api.ts if possible or ensure fields match
+type Product = ApiProduct;
+
+// Use StoresInfo from lib/api.ts for stores state
+interface Store extends StoresInfo {}
 
 // Restore SettlementResponse locally if not exported from lib/api
 interface SettlementResponse {
@@ -194,11 +194,8 @@ export function SettlementRecordsTable() {
     
     try {
         setIsAddingRecord(true);
-        const response = await fetch('http://localhost:8000/api/settlements/', {
+        const response = await fetchWithAuth('http://localhost:8000/api/settlement/', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
             body: JSON.stringify(payload),
         });
 
@@ -238,44 +235,30 @@ export function SettlementRecordsTable() {
   };
 
   React.useEffect(() => {
-    const fetchProducts = async () => {
+    const loadProducts = async () => {
       try {
         setLoadingProducts(true);
         setProductsError(null);
-        const response = await fetch(`${API_BASE_URL}/info/products`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        }); 
-        if (!response.ok) {
-          let errorMsg = 'Failed to fetch products';
-          try {
-            const errorData = await response.json();
-            errorMsg = `Failed to fetch products: ${response.status} ${response.statusText} - ${errorData.detail || JSON.stringify(errorData)}`;
-          } catch (jsonError) {
-            errorMsg = `Failed to fetch products: ${response.status} ${response.statusText}`;
-          }
-          throw new Error(errorMsg);
-        }
-        const data: Product[] = await response.json();
-        const sortedData = [...data].sort((a, b) => 
+        console.log("Settlement: Fetching products...");
+        const data = await apiFetchProducts();
+        console.log("Settlement: Raw products fetched:", data);
+  
+        // Remove the filtering logic since the API should return valid data
+        const sortedData = [...data].sort((a, b) =>
           (a.name || '').localeCompare(b.name || '')
         );
+        console.log("Settlement: Setting sorted products to state:", sortedData);
         setProducts(sortedData);
       } catch (err) {
-        console.error("Error fetching products:", err);
+        console.error("Settlement: Error fetching products:", err);
         setProductsError(err instanceof Error ? err.message : 'An unknown error occurred');
         setProducts([]);
       } finally {
         setLoadingProducts(false);
       }
     };
-    fetchProducts();
+    loadProducts();
   }, []);
-
   const handleAddItem = () => {
     setSettlementItems([...settlementItems, { product_id: undefined, quantity: 1, unit_price: 0 }]);
   };
@@ -292,9 +275,10 @@ export function SettlementRecordsTable() {
     if (field === 'quantity') {
       numValue = value ? Math.max(1, Number(value)) : undefined;
     } else if (field === 'unit_price') {
-        numValue = value ? Math.max(0, Number(value)) : undefined;
+      numValue = value ? Math.max(0, Number(value)) : undefined;
     } else if (field === 'product_id') {
-        numValue = value ? Number(value) : undefined;
+      numValue = value ? Number(value) : undefined;
+      console.log(`Converted product_id value from ${value} to ${numValue}`);
     } else {
       return; 
     }
@@ -304,8 +288,15 @@ export function SettlementRecordsTable() {
     if (field === 'product_id' && numValue !== undefined) {
       const selectedProduct = products.find(p => p.id === numValue);
       console.log(`Selected product for ID ${numValue}:`, selectedProduct);
-      updatedItems[index].unit_price = selectedProduct?.price ?? 0;
-      console.log(`Set unit_price for index ${index} to: ${updatedItems[index].unit_price}`);
+      
+      if (selectedProduct) {
+        updatedItems[index].unit_price = selectedProduct.price ?? 0;
+        console.log(`Set unit_price for index ${index} to: ${updatedItems[index].unit_price}`);
+      } else {
+        console.warn(`Settlement: Product with ID ${numValue} not found`);
+        // 设置默认价格为0
+        updatedItems[index].unit_price = 0;
+      }
     }
 
     setSettlementItems(updatedItems);
@@ -332,7 +323,7 @@ export function SettlementRecordsTable() {
           if (isNaN(settlementIdNumber)) {
               throw new Error("Invalid Settlement ID format");
           }
-          const response = await fetch(`${API_BASE_URL}/settlement/${settlementIdNumber}`);
+          const response = await fetchWithAuth(`${API_BASE_URL}/settlement/${settlementIdNumber}`);
           if (!response.ok) {
               const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch items' }));
               throw new Error(errorData.detail || `HTTP error ${response.status}`);
@@ -371,7 +362,7 @@ export function SettlementRecordsTable() {
            if (isNaN(settlementIdNumber)) {
                throw new Error("Invalid Settlement ID format for edit");
            }
-           const response = await fetch(`${API_BASE_URL}/settlement/${settlementIdNumber}`);
+           const response = await fetchWithAuth(`${API_BASE_URL}/settlement/${settlementIdNumber}`);
            if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch record for editing' }));
                 throw new Error(errorData.detail || `HTTP error ${response.status}`);
@@ -393,9 +384,8 @@ export function SettlementRecordsTable() {
         setIsEditingRecord(true);
 
         try {
-             const response = await fetch(`${API_BASE_URL}/settlement/${recordToEdit.settlement_id}`, {
+             const response = await fetchWithAuth(`${API_BASE_URL}/settlement/${recordToEdit.settlement_id}`, {
                  method: 'PUT',
-                 headers: { 'Content-Type': 'application/json' },
                  body: JSON.stringify(updatedData),
              });
              if (!response.ok) {
@@ -668,14 +658,21 @@ export function SettlementRecordsTable() {
                      </SelectTrigger>
                      <SelectContent>
                        {productsError && <p className="text-red-500 text-xs p-2">{productsError}</p>}
-                       {products.map((product) => (
-                         <SelectItem key={product.id} value={String(product.id)}>
-                           <div>
-                             {product.name}
-                             <div className="text-xs text-muted-foreground">{product.code}</div>
-                           </div>
-                         </SelectItem>
-                       ))}
+                       {products.map((product) => {
+                         if (!product || product.id === null || product.id === undefined || isNaN(Number(product.id))) {
+                           console.warn("Settlement: Skipping rendering SelectItem for invalid product:", product);
+                           return null;
+                         }
+                         console.log(`Settlement: Rendering product ${product.name} with key ${product.id}`);
+                         return (
+                           <SelectItem key={product.id} value={String(product.id)}>
+                             <div>
+                               {product.name}
+                               <div className="text-xs text-muted-foreground">{product.code}</div>
+                             </div>
+                           </SelectItem>
+                         );
+                       })}
                      </SelectContent>
                    </Select>
                    <div className="relative w-24">

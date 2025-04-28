@@ -13,12 +13,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchStores as apiFetchStores, StoresInfo } from "@/lib/api";
 
-// Define a type for the store data
-interface Store {
-  store_id: number; // Assuming the API returns store_id and store_name
-  store_name: string;
-}
+// Define a type for the store data - Use the imported type or ensure fields match
+// interface Store {
+//   id: string; // Assuming fetchStores returns id as string
+//   name: string;
+// }
+// Use StoresInfo directly or align local Store type with it
+interface Store extends StoresInfo {}
 
 // 创建Context来全局管理Settlement的视图模式
 export type ViewMode = "total" | "by-store";
@@ -28,39 +31,29 @@ export const SettlementViewContext = React.createContext({
   storeId: "all" as string, // Keep 'all' as the initial default/identifier for "All Stores"
   setViewMode: (() => {}) as React.Dispatch<React.SetStateAction<ViewMode>>,
   setStoreId: (() => {}) as React.Dispatch<React.SetStateAction<string>>,
-  stores: [] as Store[], // Add stores to context if needed by other components, or keep fetching local
-  loadingStores: true, // Add loading state to context if needed
+  stores: [] as Store[], // Use updated Store type
+  loadingStores: true,
 });
 
 // SettlementViewProvider component to provide context
 export function SettlementViewProvider({ children }: { children: React.ReactNode }) {
   const [viewMode, setViewMode] = React.useState<ViewMode>("total");
   const [storeId, setStoreId] = React.useState("all");
-  const [stores, setStores] = useState<Store[]>([]);
+  const [stores, setStores] = useState<Store[]>([]); // Use updated Store type
   const [loadingStores, setLoadingStores] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchStores = async () => {
+    const loadStores = async () => {
       try {
         setLoadingStores(true);
-        // Use the correct API endpoint based on backend/routers/info.py, including the port
-        const response = await fetch('http://localhost:8000/api/info/stores'); // Add backend host and port
-        if (!response.ok) {
-          // Include more error details if possible
-          let errorMsg = 'Failed to fetch stores';
-          try {
-            const errorData = await response.json();
-            errorMsg = `Failed to fetch stores: ${response.status} ${response.statusText} - ${errorData.detail || JSON.stringify(errorData)}`;
-          } catch (jsonError) {
-            errorMsg = `Failed to fetch stores: ${response.status} ${response.statusText}`;
-          }
-          throw new Error(errorMsg);
-        }
-        const data: Store[] = await response.json();
+        // Use the imported authenticated function
+        const data: StoresInfo[] = await apiFetchStores(); // Fetch returns StoresInfo[]
+        // Data already matches the Store type (which extends StoresInfo)
+        
         // Sort stores alphabetically by name before setting state
         const sortedData = [...data].sort((a, b) => 
-          a.store_name.localeCompare(b.store_name)
+          a.store_name.localeCompare(b.store_name) // Use store_name
         );
         setStores(sortedData);
         setError(null); // Clear error on success
@@ -73,7 +66,7 @@ export function SettlementViewProvider({ children }: { children: React.ReactNode
       }
     };
 
-    fetchStores();
+    loadStores();
   }, []); // Empty dependency array ensures this runs once on mount
 
 
@@ -150,13 +143,11 @@ export function SettlementFilter() {
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Stores</SelectLabel>
-              {/* Add "All Stores" option manually */}
               <SelectItem key="all" value="all"> 
                 All Stores
               </SelectItem>
-              {/* Map over fetched stores */}
               {stores.map((store) => (
-                // Use store_id as value and store_name as display text
+                // Use store_id (number) as value and store_name as display text
                 <SelectItem key={store.store_id} value={String(store.store_id)}> 
                   {store.store_name}
                 </SelectItem>

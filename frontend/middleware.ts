@@ -9,29 +9,38 @@ export async function middleware(req: NextRequest) {
   // 使用 Supabase Auth Helpers 创建 Supabase 客户端
   const supabase = createMiddlewareClient({ req, res })
 
-  // 获取当前会话信息
-  const { data: { session } } = await supabase.auth.getSession()
+  // 尝试获取/刷新会话信息 (New way)
+  const { data: { user } } = await supabase.auth.getUser();
+  const session = user ? (await supabase.auth.getSession()).data.session : null; // 确保获取 session 对象
 
   const isAuthPage = req.nextUrl.pathname === '/login' || req.nextUrl.pathname === '/register';
+  const isRootPage = req.nextUrl.pathname === '/';
 
-  // 如果用户未登录且尝试访问受保护的路径 (非登录/注册页)
-  if (!session && !isAuthPage && req.nextUrl.pathname.startsWith('/')) { // Protecting all routes except auth pages
-     // Only redirect non-auth pages. Allow access to '/' if it's public
-     if (req.nextUrl.pathname !== '/') {
-         const redirectUrl = req.nextUrl.clone()
-         redirectUrl.pathname = '/login'
-         // Optional: Pass the original path to redirect back after login
-         redirectUrl.searchParams.set(`redirectedFrom`, req.nextUrl.pathname)
-         return NextResponse.redirect(redirectUrl)
-     }
+  // 如果用户未登录
+  if (!session) {
+    // 如果访问的不是认证页面 (登录/注册)
+    if (!isAuthPage) {
+       // 重定向到登录页，并附带原始路径信息
+       const redirectUrl = req.nextUrl.clone()
+       redirectUrl.pathname = '/login'
+       // 如果原始访问的是根路径以外的路径，则记录下来以便登录后跳回
+       if (!isRootPage) {
+           redirectUrl.searchParams.set(`redirectedFrom`, req.nextUrl.pathname)
+       }
+       return NextResponse.redirect(redirectUrl)
+    }
+    // 如果访问的是认证页面，则允许访问
+    return res;
   }
 
-  // 如果用户已登录且尝试访问登录或注册页面
-  if (session && isAuthPage) {
-      // 重定向到主面板页面
+  // 如果用户已登录
+  if (session) {
+    // 如果尝试访问认证页面或根页面，重定向到 dashboard
+    if (isAuthPage || isRootPage) {
       const redirectUrl = req.nextUrl.clone()
       redirectUrl.pathname = '/dashboard'
       return NextResponse.redirect(redirectUrl)
+    }
   }
 
   return res
@@ -41,15 +50,25 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * 匹配所有请求路径，除了以以下开头的路径：
+     * Match all request paths except for the ones starting with:
      * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - BW-1.png, BW-2.png, logo.svg (image files in public)
+     * - Files in /public folder with common image extensions or specific names
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|WW-1.png|BW-2.png|logo.svg).*)',
-    // 添加需要保护的特定路径，例如 '/dashboard/:path*'
-    // '/dashboard/:path*', // 保护 dashboard 及其所有子路径
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // Explanation of the new regex:
+    // (?!...) Negative lookahead: asserts that the following pattern does not match
+    // api|_next/static|_next/image|favicon.ico : Excludes these specific paths
+    // |.*\\.(?:svg|png|jpg|jpeg|gif|webp)$ : Excludes any path ending with common image extensions.
+    //   .* : Matches any characters
+    //   \\. : Matches a literal dot
+    //   (?:...) : Non-capturing group for extensions
+    //   svg|png|... : Matches common image extensions
+    //   $ : Matches the end of the string
+
+    // If you prefer explicit file names instead of extension matching:
+    // '/((?!api|_next/static|_next/image|favicon.ico|WW-1.png|BW-1.png|BW-2.png|logo.svg|CAMPAIGN_9.jpg).*)',
   ],
 } 

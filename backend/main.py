@@ -1,3 +1,15 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file in the backend directory
+# Make sure .env is in the same directory as this script or specify path
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path=dotenv_path)
+    print(f".env file loaded from {dotenv_path}")
+else:
+    print(f".env file not found at {dotenv_path}, relying on system environment variables.")
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -5,7 +17,6 @@ from routers import metrics, info, inventory, settlement
 from routers import auth
 from supabase import Client
 from db.database import get_supabase
-import os
 import uvicorn
 
 logging.basicConfig(level=logging.INFO)

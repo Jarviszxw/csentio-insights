@@ -177,39 +177,43 @@ export function EditSettlementDialog({
 
   const handleItemChange = (index: number, field: keyof EditSettlementItemForm, value: any) => {
     const updatedItems = [...items];
-    let numValue: number | undefined;
-    let targetValue: any = value;
+    if (field === 'product_id') {
+      const numId = Number(value);
+      updatedItems[index] = {
+        ...updatedItems[index],
+        product_id: numId,
+      };
 
-    // Convert numeric fields
-    if (field === 'quantity' || field === 'unit_price' || field === 'product_id') {
-       if (value === '' || value === null || value === undefined) {
-           numValue = undefined;
-           targetValue = undefined; // Store undefined for empty numeric fields
-       } else {
-           numValue = Number(value);
-           if (isNaN(numValue)) numValue = undefined; // Invalid number becomes undefined
-           targetValue = numValue; // Store the number
-       }
-       // Apply constraints
-       if (field === 'quantity' && numValue !== undefined) targetValue = Math.max(1, numValue);
-       if (field === 'unit_price' && numValue !== undefined) targetValue = Math.max(0, numValue);
+      // Set price from product if available
+      const selectedProduct = products.find(p => p.id === numId);
+      if (selectedProduct?.price !== undefined) {
+        updatedItems[index].unit_price = selectedProduct.price;
+      } else {
+        console.warn(`Edit Settlement: Product with ID ${numId} not found or has no price`);
+        // 如果找不到产品或价格不存在，设置默认价格为0
+        updatedItems[index].unit_price = 0;
+      }
+    } else if (field === 'quantity') {
+      updatedItems[index] = {
+        ...updatedItems[index],
+        quantity: value ? Math.max(1, Number(value)) : undefined,
+      };
+    } else if (field === 'unit_price') {
+      updatedItems[index] = {
+        ...updatedItems[index],
+        unit_price: value ? Math.max(0, Number(value)) : undefined,
+      };
     }
-
-    // Create a new item object to ensure state update
-    const newItem = { ...updatedItems[index], [field]: targetValue };
-    updatedItems[index] = newItem;
-
-
-    // Auto-fill price if product changes
-    if (field === 'product_id' && typeof targetValue === 'number') {
-      const selectedProduct = products.find(p => p.id === targetValue);
-       console.log(`Edit: Selected product for ID ${targetValue}:`, selectedProduct);
-       // Set unit_price, defaulting to 0 if not found
-       newItem.unit_price = selectedProduct?.price ?? 0;
-       console.log(`Edit: Set unit_price for index ${index} to: ${newItem.unit_price}`);
-    }
-
+    
     setItems(updatedItems);
+    
+    // Recalculate total
+    const calculatedTotal = updatedItems.reduce((sum, item) => {
+      const qty = item.quantity || 0;
+      const price = item.unit_price || 0;
+      return sum + (qty * price);
+    }, 0);
+    setTotalAmount(calculatedTotal.toString());
   };
 
 
@@ -368,21 +372,25 @@ export function EditSettlementDialog({
                                  ) : 'Select product';
                                })()
                              ) : (
-                               // loadingProducts ? "Loading..." : "Select product"
-                                "Select product"
+                               "Select product"
                              )}
                            </SelectValue>
                          </SelectTrigger>
                          <SelectContent>
-                           {/* {productsError && <p className="text-red-500 text-xs p-2">{productsError}</p>} */}
-                           {products.map((product) => (
-                             <SelectItem key={product.id} value={String(product.id)}>
-                               <div>
-                                 {product.name}
-                                 <div className="text-xs text-muted-foreground">{product.code}</div>
-                               </div>
-                             </SelectItem>
-                           ))}
+                           {products.map((product) => {
+                             if (!product || product.id === null || product.id === undefined || isNaN(Number(product.id))) {
+                               console.warn("Edit Settlement: Skipping rendering SelectItem for invalid product:", product);
+                               return null;
+                             }
+                             return (
+                               <SelectItem key={product.id} value={String(product.id)}>
+                                 <div>
+                                   {product.name}
+                                   <div className="text-xs text-muted-foreground">{product.code}</div>
+                                 </div>
+                               </SelectItem>
+                             );
+                           })}
                          </SelectContent>
                        </Select>
                        {/* Unit Price Input - Apply Add Form Styles */}
