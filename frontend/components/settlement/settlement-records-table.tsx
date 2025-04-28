@@ -194,7 +194,7 @@ export function SettlementRecordsTable() {
     
     try {
         setIsAddingRecord(true);
-        const response = await fetchWithAuth('http://localhost:8000/api/settlement/', {
+        const response = await fetchWithAuth(`${API_BASE_URL}/settlement/`, {
             method: 'POST',
             body: JSON.stringify(payload),
         });
