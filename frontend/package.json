@@ -62,7 +62,8 @@
     "tailwindcss-animate": "^1.0.7",
     "theme-provider": "^1.0.8",
     "tw-animate-css": "^1.2.5",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
