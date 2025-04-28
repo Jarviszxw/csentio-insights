@@ -22,16 +22,25 @@ def get_supabase() -> Client:
 
     return create_client(supabase_url, supabase_key)
 
-async def get_supabase_async():
+# async def get_supabase_async():
+#     supabase_url = os.getenv("SUPABASE_URL")
+#     supabase_key = os.getenv("SUPABASE_KEY")
+    
+#     if not supabase_url or not supabase_key:
+#         logger.error("Supabase URL or Key is missing in environment variables for async!")
+#         raise ValueError("Supabase configuration is missing in environment variables.")
+        
+#     from supabase.client import ClientOptions, SupabaseClient
+#     options = ClientOptions(schema="public", auto_refresh_token=True, persist_session=True, use_tls=False)
+#     async with httpx.AsyncClient() as client:
+#         return await SupabaseClient(supabase_url, supabase_key, options, client).auth.get_session()
+async def get_supabase_async() -> Client:
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_KEY")
     
     if not supabase_url or not supabase_key:
         logger.error("Supabase URL or Key is missing in environment variables for async!")
         raise ValueError("Supabase configuration is missing in environment variables.")
-        
-    from supabase.client import ClientOptions, SupabaseClient
-    options = ClientOptions(schema="public", auto_refresh_token=True, persist_session=True, use_tls=False)
-    async with httpx.AsyncClient() as client:
-        return await SupabaseClient(supabase_url, supabase_key, options, client).auth.get_session()
     
+    options = ClientOptions(schema="public", auto_refresh_token=True, persist_session=False)
+    return create_client(supabase_url, supabase_key, options=options)
