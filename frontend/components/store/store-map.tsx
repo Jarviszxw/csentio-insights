@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 import { useStoreView } from "./store-context";
 import supabase from "@/lib/supabase";
-import { Store } from "@/components/map-components";
+import { Store } from "@/components/store/map-components";
 // 客户端组件不会在服务器端渲染
 const MapComponents = dynamic(
-  () => import("@/components/map-components").then(mod => ({ default: mod.MapComponents })),
+  () => import("@/components/store/map-components").then(mod => ({ default: mod.MapComponents })),
   { 
     ssr: false,
     loading: () => (
