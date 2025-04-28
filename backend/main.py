@@ -27,7 +27,12 @@ app = FastAPI(title="CSENTIO API")
 # CORS config
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], 
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://csentio-insights-frontend.vercel.app",  # 添加生产环境前端域名
+        "https://csentio-insights-frontend-*.vercel.app"  # 包含所有Vercel预览部署
+    ], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
