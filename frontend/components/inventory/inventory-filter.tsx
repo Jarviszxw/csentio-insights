@@ -23,7 +23,7 @@ export const InventoryViewContext = React.createContext<InventoryViewContextType
   storeId: "all",
   setViewMode: () => {},
   setStoreId: () => {},
-  stores: [{ id: 'all', name: 'All Stores' }],
+  stores: [],
   isLoading: false,
 });
 
@@ -46,9 +46,12 @@ export function InventoryFilter() {
           <SelectContent>
             <SelectGroup>
               <SelectLabel>Stores</SelectLabel>
+              <SelectItem key="all" value="all">
+                All Stores
+              </SelectItem>
               {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
+                <SelectItem key={store.store_id} value={String(store.store_id)}>
+                  {store.store_name}
                 </SelectItem>
               ))}
             </SelectGroup>
