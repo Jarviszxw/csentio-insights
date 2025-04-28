@@ -104,6 +104,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      font:
+        specifier: link:@vercel/turbopack-next/internal/font/google/font
+        version: link:@vercel/turbopack-next/internal/font/google/font
       form:
         specifier: link:@/components/ui/form
         version: link:@/components/ui/form
