@@ -3,8 +3,14 @@ import { DateRange } from "react-day-picker";
 import supabase from './supabase';
 import { Session } from '@supabase/supabase-js';
 
-// API 基础 URL
-export const API_BASE_URL = 'http://localhost:8000/api';
+// API 基础 URL - 优先使用环境变量，否则根据环境使用适当的默认值
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://csentio-insights-backend.vercel.app/api' 
+    : 'http://localhost:8000/api');
+
+// 在初始化时输出当前使用的API URL
+console.log(`API: 使用API基础URL: ${API_BASE_URL}, 环境: ${process.env.NODE_ENV}`);
 
 export interface StoresInfo {
   store_id: number;
