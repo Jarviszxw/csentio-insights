@@ -18,6 +18,8 @@ from routers import auth
 from supabase import Client
 from db.database import get_supabase
 import uvicorn
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,7 +51,7 @@ async def custom_exception_handler(request: Request, exc: Exception):
             "Access-Control-Allow-Headers": "*"
         }
     )
-    
+
 app.include_router(metrics.router)
 app.include_router(info.router)
 app.include_router(inventory.router)
